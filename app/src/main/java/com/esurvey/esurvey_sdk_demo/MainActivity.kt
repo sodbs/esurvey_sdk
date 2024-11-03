@@ -2,6 +2,10 @@
 
 package com.esurvey.esurvey_sdk_demo
 
+import com.esurvey.esurvey_sdk_demo.ui.theme.Esurvey_sdk_demoTheme
+
+
+
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -37,7 +41,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
-
 import com.esurvey.sdk.out.ESurvey
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -52,13 +55,15 @@ import cn.com.heaton.blelibrary.ble.model.BleDevice
 import com.blankj.utilcode.util.ActivityUtils
 import com.blankj.utilcode.util.PermissionUtils
 import com.blankj.utilcode.util.ToastUtils
-import com.esurvey.esurvey_sdk_demo.ui.theme.Esurvey_sdk_demoTheme
 import com.esurvey.sdk.out.data.Constant
 import com.esurvey.sdk.out.data.LocationState
 import com.esurvey.sdk.out.listener.ESAntennaConnectListener
 import com.esurvey.sdk.out.listener.ESAntennaDisConnectListener
 import com.esurvey.sdk.out.listener.ESLocationChangeListener
 import com.esurvey.sdk.out.listener.ESUsbAttachChangeListener
+
+
+
 class MainActivity : ComponentActivity() {
     val instance = ESurvey.getInstance()
 
@@ -83,8 +88,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         instance.setOnUsbAttachChangeListener(object : ESUsbAttachChangeListener {
-            override fun onChange(isConnect: Boolean) {
-                usbAttachFlag = isConnect
+            override fun onChange(isAttach: Boolean) {
+                usbAttachFlag = isAttach
             }
         })
 
@@ -203,8 +208,6 @@ class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalLayoutApi::class)
     @Composable
     fun LocationBox() {
-
-
         LaunchedEffect(true) {
             instance.setOnLocationStateChangeListener(object : ESLocationChangeListener {
                 override fun onChange(locationStateParam: LocationState) {
@@ -311,8 +314,6 @@ class MainActivity : ComponentActivity() {
             Button(onClick = {
 
                 val bleInstance = instance.getBleInstance(this@MainActivity)
-
-
                 bleInstance.startScan(object : BleScanCallback<BleDevice>() {
                     override fun onLeScan(device: BleDevice?, rssi: Int, scanRecord: ByteArray?) {
                         if (device == null){
@@ -353,12 +354,17 @@ class MainActivity : ComponentActivity() {
                     isStartSuccess: Boolean,
                     message: String
                 ) {
-                    locationSource = source
+
                     isConnectSuccessState = isConnectSuccess
                     isStartSuccessState = isStartSuccess
                     messageState = message
 
-
+                    // typec 是为连接
+                    locationSource = if (source == Constant.ANTENNA_SOURCE_BLUETOOTH && !instance.usbConnectStatus) {
+                        source
+                    } else {
+                        source
+                    }
                     if (isConnectSuccessState) {
                         if (source == Constant.ANTENNA_SOURCE_BLUETOOTH) {
                             bluetoothFlag = true
@@ -421,3 +427,4 @@ class MainActivity : ComponentActivity() {
     }
 
 }
+
