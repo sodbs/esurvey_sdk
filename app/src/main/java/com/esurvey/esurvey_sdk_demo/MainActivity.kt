@@ -5,9 +5,11 @@ package com.esurvey.esurvey_sdk_demo
 import com.esurvey.esurvey_sdk_demo.ui.theme.Esurvey_sdk_demoTheme
 
 
-
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -53,15 +55,19 @@ import androidx.compose.ui.unit.dp
 import cn.com.heaton.blelibrary.ble.callback.BleScanCallback
 import cn.com.heaton.blelibrary.ble.model.BleDevice
 import com.blankj.utilcode.util.ActivityUtils
+import com.blankj.utilcode.util.AppUtils
 import com.blankj.utilcode.util.PermissionUtils
+import com.blankj.utilcode.util.SDCardUtils
 import com.blankj.utilcode.util.ToastUtils
 import com.esurvey.sdk.out.data.Constant
 import com.esurvey.sdk.out.data.LocationState
+import com.esurvey.sdk.out.listener.ESAntennaAuthListener
 import com.esurvey.sdk.out.listener.ESAntennaConnectListener
 import com.esurvey.sdk.out.listener.ESAntennaDisConnectListener
 import com.esurvey.sdk.out.listener.ESLocationChangeListener
+import com.esurvey.sdk.out.listener.ESMobileHighStatusListener
 import com.esurvey.sdk.out.listener.ESUsbAttachChangeListener
-
+import com.lxj.xpopup.XPopup
 
 
 class MainActivity : ComponentActivity() {
@@ -94,6 +100,7 @@ class MainActivity : ComponentActivity() {
         })
 
         onPermissionRequest()
+        TipsSoundsService.init(this)
 
         setContent {
             Esurvey_sdk_demoTheme {
@@ -171,8 +178,7 @@ class MainActivity : ComponentActivity() {
             LocationBox()
             USBBox()
             BlueToothBox()
-
-
+            MobileHighLocation()
             if (bluetoothDeviceList.isNotEmpty()) {
                 ModalBottomSheet(onDismissRequest = {
                     bluetoothDeviceList.clear()
@@ -204,6 +210,99 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+
+    @Composable
+    fun MobileHighLocation() {
+
+        var mobileHighIsStart by remember {
+            mutableStateOf(false)
+        }
+
+        LaunchedEffect(true) {
+
+            instance.setOnMobileHighStatusChangeListener(object : ESMobileHighStatusListener {
+                override fun onChange(status: Int) {
+                    if (status == Constant.MOBILE_HIGH_OPEN) {
+                        mobileHighIsStart = true
+                    } else {
+                        mobileHighIsStart = false
+                    }
+                }
+
+                override fun onPlaySounds(soundType: Int) {
+                    TipsSoundsService.getInstance().playJtSounds(soundType)
+                }
+            })
+        }
+        Column {
+            if (mobileHighIsStart) {
+                Button(onClick = {
+                    instance.stopMobileHighLocation()
+                    locationState = null
+                    mobileHighIsStart = false
+                }) {
+                    Text("关闭手机高精度定位")
+                }
+            } else {
+                Button(onClick = {
+
+                    val start = {
+
+                        val rtkUserId = ""
+                        val rtkSecret = ""
+                        if (rtkSecret.isEmpty() || rtkUserId.isEmpty()) {
+                            ToastUtils.showLong("请先配置rtkUserId和rtkSecret")
+                        } else {
+                            val sdCardPathByEnvironment =
+                                SDCardUtils.getSDCardPathByEnvironment()
+
+                            mobileHighIsStart = true
+                            instance.startMobileHighLocation(this@MainActivity, rtkUserId, rtkSecret, sdCardPathByEnvironment)
+                        }
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        if (Environment.isExternalStorageManager()) {
+                            start()
+                        } else {
+                            // 无权限，打开权限设置界面
+                            XPopup.Builder(this@MainActivity)
+                                .asConfirm("请先授予文件权限", "请先授予文件权限", "", "确定", {
+                                    try {
+                                        val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                                        ActivityUtils.getTopActivity().startActivity(intent)
+                                    } catch (e: Exception) {
+                                        // 在某些设备上，可能需要手动指导用户打开该设置页面
+                                        val intent = Intent(Settings.ACTION_SETTINGS)
+                                        this@MainActivity.startActivity(intent)
+                                    }
+                                }, {}, true)
+                                .show()
+                        }
+                    } else {
+                        PermissionUtils.permission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE, android.Manifest.permission.READ_EXTERNAL_STORAGE)
+                            .callback(object : PermissionUtils.SimpleCallback {
+                                override fun onGranted() {
+                                    start()
+                                }
+
+                                override fun onDenied() {
+                                    XPopup.Builder(this@MainActivity)
+                                        .asConfirm("请先授予文件权限", "请找到本App,并且打开文件权限", "", "确定", {
+                                            PermissionUtils.launchAppDetailsSettings()
+                                        }, {}, true)
+                                        .show()
+                                }
+                            }).request()
+
+
+                    }
+
+                }) {
+                    Text("开启手机高精度定位")
+                }
+            }
+        }
+    }
 
     @OptIn(ExperimentalLayoutApi::class)
     @Composable
@@ -312,7 +411,6 @@ class MainActivity : ComponentActivity() {
 
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             Button(onClick = {
-
                 val bleInstance = instance.getBleInstance(this@MainActivity)
                 bleInstance.startScan(object : BleScanCallback<BleDevice>() {
                     override fun onLeScan(device: BleDevice?, rssi: Int, scanRecord: ByteArray?) {
@@ -404,6 +502,19 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             })
+
+
+            instance.setOnAntennaAuthListener(object: ESAntennaAuthListener {
+                override fun onAuthentication(
+                    isAuthentication: Boolean,
+                    message: String
+                ) {
+                    if (!isAuthentication) {
+                        ToastUtils.showLong("认证失败: ${message}")
+                    }
+                }
+
+            })
         }
 
         Column(
@@ -427,4 +538,3 @@ class MainActivity : ComponentActivity() {
     }
 
 }
-

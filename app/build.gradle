@@ -9,7 +9,7 @@ android {
 
     defaultConfig {
         applicationId "com.esurvey.esurvey_sdk_demo"
-        minSdk 24
+        minSdk 26
         targetSdk 34
         versionCode 1
         versionName "1.0"
@@ -63,7 +63,12 @@ dependencies {
     androidTestImplementation libs.androidx.ui.test.junit4
     debugImplementation libs.androidx.ui.tooling
     debugImplementation libs.androidx.ui.test.manifest
+    implementation ("com.github.li-xiaojun:XPopup:2.9.19")
 
-    implementation 'com.github.sodbs:esurvey_sdk:0.2'
+    implementation 'com.github.sodbs:esurvey_sdk:0.4'
     implementation ("com.blankj:utilcodex:1.31.1")
+
+    implementation 'joda-time:joda-time:2.10.6'
+    implementation(name: 'rtk-debug', ext: 'aar')
+
 }
