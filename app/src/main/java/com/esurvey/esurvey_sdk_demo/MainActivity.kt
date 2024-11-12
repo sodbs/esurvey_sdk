@@ -1,8 +1,5 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
-
 package com.esurvey.esurvey_sdk_demo
-
-import com.esurvey.esurvey_sdk_demo.ui.theme.Esurvey_sdk_demoTheme
 
 
 import android.content.Intent
@@ -29,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -56,37 +54,43 @@ import cn.com.heaton.blelibrary.ble.callback.BleScanCallback
 import cn.com.heaton.blelibrary.ble.model.BleDevice
 import com.blankj.utilcode.util.ActivityUtils
 import com.blankj.utilcode.util.AppUtils
+import com.blankj.utilcode.util.FileUtils
 import com.blankj.utilcode.util.PermissionUtils
 import com.blankj.utilcode.util.SDCardUtils
 import com.blankj.utilcode.util.ToastUtils
+import com.esurvey.esurvey_sdk_demo.TipsSoundsService
+import com.esurvey.esurvey_sdk_demo.ui.theme.Esurvey_sdk_demoTheme
 import com.esurvey.sdk.out.data.Constant
 import com.esurvey.sdk.out.data.LocationState
 import com.esurvey.sdk.out.listener.ESAntennaAuthListener
 import com.esurvey.sdk.out.listener.ESAntennaConnectListener
 import com.esurvey.sdk.out.listener.ESAntennaDisConnectListener
+import com.esurvey.sdk.out.listener.ESAntennaMeasureEnableListener
+import com.esurvey.sdk.out.listener.ESAntennaMeasureListener
 import com.esurvey.sdk.out.listener.ESLocationChangeListener
 import com.esurvey.sdk.out.listener.ESMobileHighStatusListener
 import com.esurvey.sdk.out.listener.ESUsbAttachChangeListener
 import com.lxj.xpopup.XPopup
 
 
+
 class MainActivity : ComponentActivity() {
     val instance = ESurvey.getInstance()
 
     var bluetoothFlag by mutableStateOf(false)
+    var measureFlag by mutableStateOf(false)
     var usbFlag by mutableStateOf(false)
 
-    var locationState by  mutableStateOf<LocationState?>(null)
+    var locationState by mutableStateOf<LocationState?>(null)
     var usbAttachFlag by mutableStateOf(false)
     var permissionFlag by mutableStateOf(false)
     var isConnectSuccessState by mutableStateOf(false)
-    var locationSource   by mutableStateOf(-1)
+    var locationSource by mutableStateOf(-1)
 
     val bluetoothDeviceList = mutableStateListOf<BleDevice>()
 
 
-
-    var messageState by    mutableStateOf("暂无日志")
+    var messageState by mutableStateOf("暂无日志")
     val lon = 112.994693
     val lat = 28.149546
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -179,6 +183,7 @@ class MainActivity : ComponentActivity() {
             USBBox()
             BlueToothBox()
             MobileHighLocation()
+            MeasureBox()
             if (bluetoothDeviceList.isNotEmpty()) {
                 ModalBottomSheet(onDismissRequest = {
                     bluetoothDeviceList.clear()
@@ -195,8 +200,13 @@ class MainActivity : ComponentActivity() {
                                         modifier = Modifier.size(16.dp)
                                     )
                                 },
-                                modifier = Modifier.clickable{
-                                    instance.bluetoothConnect(this@MainActivity, bluetoothDeviceList[it], lon, lat)
+                                modifier = Modifier.clickable {
+                                    instance.bluetoothConnect(
+                                        this@MainActivity,
+                                        bluetoothDeviceList[it],
+                                        lon,
+                                        lat
+                                    )
                                     ToastUtils.showLong("正在连接蓝牙设备")
                                     instance.getBleInstance(this@MainActivity).stopScan()
                                     bluetoothDeviceList.clear()
@@ -205,6 +215,52 @@ class MainActivity : ComponentActivity() {
                             HorizontalDivider()
                         }
                     }
+                }
+            }
+        }
+    }
+
+    @Composable
+    fun MeasureBox() {
+        Card(Modifier.padding(top = 10.dp)) {
+            Row(Modifier.padding(10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Button(onClick = {
+                    instance.enableMeasure(object: ESAntennaMeasureEnableListener {
+                        override fun onStart() {
+                            measureFlag = true
+                            ToastUtils.showLong("激光测距已可用")
+                        }
+                    })
+                }, enabled = !measureFlag) {
+                    Text("测量使能")
+                }
+
+                Button(onClick = {
+                    measureFlag = false
+                    instance.disableMeasure()
+                }, enabled = measureFlag) {
+                    Text("停止测量")
+                }
+
+                Button(onClick = {
+                    /**
+                     * 先使能，再测量
+                     */
+                    instance.measure(object: ESAntennaMeasureListener {
+                        override fun onMeasure(
+                            isSuccess: Boolean,
+                            distance: String
+                        ) {
+                            if (isSuccess) {
+                                ToastUtils.showLong("距离${distance}毫米")
+                                messageState = "距离${distance}毫米"
+                            } else {
+                                ToastUtils.showLong("测量失败")
+                            }
+                        }
+                    })
+                }, enabled = measureFlag) {
+                    Text("开始测量")
                 }
             }
         }
@@ -248,7 +304,7 @@ class MainActivity : ComponentActivity() {
 
                     val start = {
 
-                        val rtkUserId = ""
+                        val rtkUserId = "ccf77219fdf101b1" + "_" + "3465"
                         val rtkSecret = ""
                         if (rtkSecret.isEmpty() || rtkUserId.isEmpty()) {
                             ToastUtils.showLong("请先配置rtkUserId和rtkSecret")
@@ -257,7 +313,17 @@ class MainActivity : ComponentActivity() {
                                 SDCardUtils.getSDCardPathByEnvironment()
 
                             mobileHighIsStart = true
-                            instance.startMobileHighLocation(this@MainActivity, rtkUserId, rtkSecret, sdCardPathByEnvironment)
+
+                            var dataRootPath= sdCardPathByEnvironment + "/PrideANDRTK/";
+                            var fileNameConf= dataRootPath +"pride_rtk.conf";
+                            val createOrExistsFile = FileUtils.createOrExistsFile(fileNameConf)
+
+                            instance.startMobileHighLocation(
+                                this@MainActivity,
+                                rtkUserId,
+                                rtkSecret,
+                                sdCardPathByEnvironment
+                            )
                         }
                     }
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -268,7 +334,8 @@ class MainActivity : ComponentActivity() {
                             XPopup.Builder(this@MainActivity)
                                 .asConfirm("请先授予文件权限", "请先授予文件权限", "", "确定", {
                                     try {
-                                        val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                                        val intent =
+                                            Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
                                         ActivityUtils.getTopActivity().startActivity(intent)
                                     } catch (e: Exception) {
                                         // 在某些设备上，可能需要手动指导用户打开该设置页面
@@ -279,7 +346,10 @@ class MainActivity : ComponentActivity() {
                                 .show()
                         }
                     } else {
-                        PermissionUtils.permission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE, android.Manifest.permission.READ_EXTERNAL_STORAGE)
+                        PermissionUtils.permission(
+                            android.Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                            android.Manifest.permission.READ_EXTERNAL_STORAGE
+                        )
                             .callback(object : PermissionUtils.SimpleCallback {
                                 override fun onGranted() {
                                     start()
@@ -287,9 +357,17 @@ class MainActivity : ComponentActivity() {
 
                                 override fun onDenied() {
                                     XPopup.Builder(this@MainActivity)
-                                        .asConfirm("请先授予文件权限", "请找到本App,并且打开文件权限", "", "确定", {
-                                            PermissionUtils.launchAppDetailsSettings()
-                                        }, {}, true)
+                                        .asConfirm(
+                                            "请先授予文件权限",
+                                            "请找到本App,并且打开文件权限",
+                                            "",
+                                            "确定",
+                                            {
+                                                PermissionUtils.launchAppDetailsSettings()
+                                            },
+                                            {},
+                                            true
+                                        )
                                         .show()
                                 }
                             }).request()
@@ -414,7 +492,7 @@ class MainActivity : ComponentActivity() {
                 val bleInstance = instance.getBleInstance(this@MainActivity)
                 bleInstance.startScan(object : BleScanCallback<BleDevice>() {
                     override fun onLeScan(device: BleDevice?, rssi: Int, scanRecord: ByteArray?) {
-                        if (device == null){
+                        if (device == null) {
                             return
                         }
                         if (device.bleName.isNullOrEmpty()) {
@@ -458,11 +536,12 @@ class MainActivity : ComponentActivity() {
                     messageState = message
 
                     // typec 是为连接
-                    locationSource = if (source == Constant.ANTENNA_SOURCE_BLUETOOTH && !instance.usbConnectStatus) {
-                        source
-                    } else {
-                        source
-                    }
+                    locationSource =
+                        if (source == Constant.ANTENNA_SOURCE_BLUETOOTH && !instance.usbConnectStatus) {
+                            source
+                        } else {
+                            source
+                        }
                     if (isConnectSuccessState) {
                         if (source == Constant.ANTENNA_SOURCE_BLUETOOTH) {
                             bluetoothFlag = true
@@ -481,6 +560,7 @@ class MainActivity : ComponentActivity() {
                         messageState = "设备已断开链接"
                         isConnectSuccessState = false
                         locationState = null
+                        measureFlag = false
 
                     }
                     if (disConnectSource == Constant.ANTENNA_SOURCE_BLUETOOTH) {
@@ -504,7 +584,7 @@ class MainActivity : ComponentActivity() {
             })
 
 
-            instance.setOnAntennaAuthListener(object: ESAntennaAuthListener {
+            instance.setOnAntennaAuthListener(object : ESAntennaAuthListener {
                 override fun onAuthentication(
                     isAuthentication: Boolean,
                     message: String
@@ -538,3 +618,4 @@ class MainActivity : ComponentActivity() {
     }
 
 }
+
