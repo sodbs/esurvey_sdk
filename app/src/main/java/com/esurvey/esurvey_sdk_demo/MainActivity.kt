@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
-package com.esurvey.esurvey_sdk_demo
 
+package com.esurvey.esurvey_sdk_demo
 
 import android.content.Intent
 import android.os.Build
@@ -10,6 +10,7 @@ import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,26 +18,39 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.ThumbUp
+import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
@@ -45,16 +59,18 @@ import com.esurvey.sdk.out.ESurvey
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import cn.com.heaton.blelibrary.ble.callback.BleScanCallback
 import cn.com.heaton.blelibrary.ble.model.BleDevice
 import com.blankj.utilcode.util.ActivityUtils
 import com.blankj.utilcode.util.AppUtils
-import com.blankj.utilcode.util.FileUtils
+import com.blankj.utilcode.util.ClipboardUtils
 import com.blankj.utilcode.util.PermissionUtils
 import com.blankj.utilcode.util.SDCardUtils
 import com.blankj.utilcode.util.ToastUtils
@@ -71,6 +87,7 @@ import com.esurvey.sdk.out.listener.ESLocationChangeListener
 import com.esurvey.sdk.out.listener.ESMobileHighStatusListener
 import com.esurvey.sdk.out.listener.ESUsbAttachChangeListener
 import com.lxj.xpopup.XPopup
+import kotlinx.coroutines.launch
 
 
 
@@ -88,11 +105,15 @@ class MainActivity : ComponentActivity() {
     var locationSource by mutableStateOf(-1)
 
     val bluetoothDeviceList = mutableStateListOf<BleDevice>()
-
+    val logList = mutableStateListOf<String>()
 
     var messageState by mutableStateOf("暂无日志")
+
+
     val lon = 112.994693
     val lat = 28.149546
+
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -108,16 +129,44 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             Esurvey_sdk_demoTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Column(
-                        Modifier
-                            .padding(innerPadding)
-                            .padding(horizontal = 20.dp, vertical = 20.dp)
-                    ) {
-                        if (permissionFlag) {
-                            App()
-                        } else {
-                            UnPermissionApp()
+                val rememberDrawerState = rememberDrawerState(DrawerValue.Closed)
+                ModalNavigationDrawer(
+                    drawerState = rememberDrawerState,
+                    drawerContent = {
+                        ModalDrawerSheet {
+                            Text("易测", modifier = Modifier.padding(16.dp))
+                            Spacer(Modifier.padding(vertical = 10.dp))
+                            LogBox()
+                        }
+                    }
+                ) {
+
+                    val scope = rememberCoroutineScope()
+                    Scaffold(
+                        floatingActionButton = {
+                            ExtendedFloatingActionButton(
+                                text = { Text("日志") },
+                                icon = { Icon(Icons.Filled.Add, contentDescription = "") },
+                                onClick = {
+                                    scope.launch {
+                                        rememberDrawerState.apply {
+                                            if (isClosed) open() else close()
+                                        }
+                                    }
+                                }
+                            )
+                        }
+                    ) { contentPadding ->
+                        Column(
+                            Modifier
+                                .padding(contentPadding)
+                                .padding(horizontal = 20.dp, vertical = 20.dp)
+                        ) {
+                            if (permissionFlag) {
+                                App()
+                            } else {
+                                UnPermissionApp()
+                            }
                         }
                     }
                 }
@@ -150,7 +199,7 @@ class MainActivity : ComponentActivity() {
                     denied: MutableList<String>
                 ) {
                     permissionFlag = false
-                    ToastUtils.showLong("请打开定位权限")
+                    syncLog("请打开定位权限")
                 }
 
             })
@@ -184,6 +233,7 @@ class MainActivity : ComponentActivity() {
             BlueToothBox()
             MobileHighLocation()
             MeasureBox()
+
             if (bluetoothDeviceList.isNotEmpty()) {
                 ModalBottomSheet(onDismissRequest = {
                     bluetoothDeviceList.clear()
@@ -207,7 +257,7 @@ class MainActivity : ComponentActivity() {
                                         lon,
                                         lat
                                     )
-                                    ToastUtils.showLong("正在连接蓝牙设备")
+                                    syncLog("正在连接蓝牙设备")
                                     instance.getBleInstance(this@MainActivity).stopScan()
                                     bluetoothDeviceList.clear()
                                 }
@@ -221,46 +271,106 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
+    fun LogBox() {
+
+        AnimatedVisibility(logList.isNotEmpty()) {
+            Card(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp)) {
+
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp, end = 10.dp),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    Icon(Icons.Default.Clear, contentDescription = "", modifier = Modifier.clickable {
+                        logList.clear()
+                    })
+                    Spacer(Modifier.padding(horizontal = 2.dp))
+                    Icon(Icons.Default.Build, contentDescription = "", modifier = Modifier.clickable {
+                        val joinToString = logList.joinToString("|")
+                        ClipboardUtils.copyText(joinToString)
+                        syncLog("复制成功")
+                    })
+
+                }
+                LazyColumn(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    items(logList.size) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(logList[it], modifier = Modifier.weight(1f))
+                            Icon(
+                                Icons.Outlined.Build,
+                                contentDescription = "",
+                                modifier = Modifier.clickable {
+                                    ClipboardUtils.copyText(logList[it])
+                                    syncLog("复制成功")
+                                })
+                        }
+                    }
+                }
+            }
+        }
+
+
+        AnimatedVisibility(logList.isEmpty()) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                Text("暂无日志")
+            }
+        }
+    }
+
+
+    @Composable
     fun MeasureBox() {
-        Card(Modifier.padding(top = 10.dp)) {
-            Row(Modifier.padding(10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Card(Modifier.padding(top = 10.dp).fillMaxWidth()) {
+            Spacer(Modifier.padding(top = 10.dp))
+            Text("激光测距",  modifier = Modifier.padding(start = 10.dp))
+            Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp).padding(bottom = 10.dp), horizontalArrangement = Arrangement.SpaceAround) {
                 Button(onClick = {
-                    instance.enableMeasure(object: ESAntennaMeasureEnableListener {
+                    instance.enableMeasure(object : ESAntennaMeasureEnableListener {
                         override fun onStart() {
                             measureFlag = true
-                            ToastUtils.showLong("激光测距已可用")
+                            syncLog("激光测距已可用")
                         }
                     })
                 }, enabled = !measureFlag) {
-                    Text("测量使能")
+                    Text("使能")
                 }
 
                 Button(onClick = {
                     measureFlag = false
                     instance.disableMeasure()
                 }, enabled = measureFlag) {
-                    Text("停止测量")
+                    Text("停止")
                 }
 
                 Button(onClick = {
                     /**
                      * 先使能，再测量
                      */
-                    instance.measure(object: ESAntennaMeasureListener {
+                    instance.measure(object : ESAntennaMeasureListener {
                         override fun onMeasure(
                             isSuccess: Boolean,
                             distance: String
                         ) {
                             if (isSuccess) {
-                                ToastUtils.showLong("距离${distance}毫米")
+                                syncLog("距离${distance}毫米")
                                 messageState = "距离${distance}毫米"
+                                syncLog("距离${distance}毫米")
                             } else {
-                                ToastUtils.showLong("测量失败")
+                                syncLog("测量失败")
                             }
                         }
                     })
                 }, enabled = measureFlag) {
-                    Text("开始测量")
+                    Text("测量")
                 }
             }
         }
@@ -301,23 +411,15 @@ class MainActivity : ComponentActivity() {
                 }
             } else {
                 Button(onClick = {
-
                     val start = {
-
-                        val rtkUserId = "ccf77219fdf101b1" + "_" + "3465"
+                        val rtkUserId = ""
                         val rtkSecret = ""
                         if (rtkSecret.isEmpty() || rtkUserId.isEmpty()) {
-                            ToastUtils.showLong("请先配置rtkUserId和rtkSecret")
+                            syncLog("请先配置rtkUserId和rtkSecret")
                         } else {
                             val sdCardPathByEnvironment =
                                 SDCardUtils.getSDCardPathByEnvironment()
-
                             mobileHighIsStart = true
-
-                            var dataRootPath= sdCardPathByEnvironment + "/PrideANDRTK/";
-                            var fileNameConf= dataRootPath +"pride_rtk.conf";
-                            val createOrExistsFile = FileUtils.createOrExistsFile(fileNameConf)
-
                             instance.startMobileHighLocation(
                                 this@MainActivity,
                                 rtkUserId,
@@ -392,6 +494,10 @@ class MainActivity : ComponentActivity() {
                 }
             })
         }
+
+        var showLocation by remember {
+            mutableStateOf(true)
+        }
         if (locationState != null) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                 SuggestionChip(
@@ -448,6 +554,7 @@ class MainActivity : ComponentActivity() {
                 label = { Text("暂无位置信息") }
             )
         }
+
     }
 
     @Composable
@@ -534,6 +641,7 @@ class MainActivity : ComponentActivity() {
                     isConnectSuccessState = isConnectSuccess
                     isStartSuccessState = isStartSuccess
                     messageState = message
+                    syncLog(message)
 
                     // typec 是为连接
                     locationSource =
@@ -558,6 +666,8 @@ class MainActivity : ComponentActivity() {
                         locationSource = -1
                         isStartSuccessState = false
                         messageState = "设备已断开链接"
+                        syncLog("设备已断开链接")
+
                         isConnectSuccessState = false
                         locationState = null
                         measureFlag = false
@@ -567,22 +677,24 @@ class MainActivity : ComponentActivity() {
                         bluetoothFlag = false
                         if (instance.usbConnectStatus) {
                             locationSource = Constant.ANTENNA_SOURCE_USB
-                            ToastUtils.showLong("已自动切换到USB方式")
+                            syncLog("已自动切换到USB方式")
                             messageState = "已自动切换到USB方式"
+                            syncLog("已自动切换到USB方式")
+
                         }
                     } else {
                         usbFlag = false
-                        ToastUtils.showLong("USB已断开")
+                        syncLog("USB已断开")
                         if (instance.blueToothStatus) {
                             locationSource = Constant.ANTENNA_SOURCE_BLUETOOTH
-                            ToastUtils.showLong("已自动切换到蓝牙方式")
+                            syncLog("已自动切换到蓝牙方式")
                             messageState = "已自动切换到蓝牙方式"
+                            syncLog("已自动切换到蓝牙方式")
 
                         }
                     }
                 }
             })
-
 
             instance.setOnAntennaAuthListener(object : ESAntennaAuthListener {
                 override fun onAuthentication(
@@ -590,7 +702,16 @@ class MainActivity : ComponentActivity() {
                     message: String
                 ) {
                     if (!isAuthentication) {
-                        ToastUtils.showLong("认证失败: ${message}")
+                        locationSource = -1
+                        isStartSuccessState = false
+                        messageState = "认证失败，无法启动设备: ${message}"
+                        syncLog("认证失败，无法启动设备: ${message}")
+
+                        isConnectSuccessState = false
+                        locationState = null
+                        measureFlag = false
+                        usbFlag = false
+                        bluetoothFlag = false
                     }
                 }
 
@@ -614,6 +735,16 @@ class MainActivity : ComponentActivity() {
             Text("是否启动成功: ${if (isStartSuccessState) "成功" else "未成功"}")
             Text("日志信息: $messageState")
         }
+
+    }
+
+
+    private fun syncLog(message: String) {
+        if (message.isEmpty()) {
+            return
+        }
+        logList.add(0, message)
+        ToastUtils.showShort(message)
 
     }
 
