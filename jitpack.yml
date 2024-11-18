@@ -1,5 +1,5 @@
 
 install:
-  - FILE="-Dfile=esurvey_sdk-0.9.aar"
-  - mvn install:install-file $FILE -DgroupId=cn.sodbs  -DartifactId=esurvey_sdk -Dversion=0.9 -Dpackaging=aar -DpomFile=pom.xml
+  - FILE="-Dfile=esurvey_sdk-0.91.aar"
+  - mvn install:install-file $FILE -DgroupId=cn.sodbs  -DartifactId=esurvey_sdk -Dversion=0.91 -Dpackaging=aar -DpomFile=pom.xml
 
