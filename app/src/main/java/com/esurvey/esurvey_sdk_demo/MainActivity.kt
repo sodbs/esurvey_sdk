@@ -66,29 +66,34 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import cn.com.heaton.blelibrary.ble.callback.BleScanCallback
-import cn.com.heaton.blelibrary.ble.model.BleDevice
 import com.blankj.utilcode.util.ActivityUtils
 import com.blankj.utilcode.util.AppUtils
 import com.blankj.utilcode.util.ClipboardUtils
 import com.blankj.utilcode.util.PermissionUtils
 import com.blankj.utilcode.util.SDCardUtils
 import com.blankj.utilcode.util.ToastUtils
-import com.esurvey.esurvey_sdk_demo.TipsSoundsService
 import com.esurvey.esurvey_sdk_demo.ui.theme.Esurvey_sdk_demoTheme
+import com.esurvey.sdk.out.ByteUtils
+import com.esurvey.sdk.out.data.BluetoothInfo
 import com.esurvey.sdk.out.data.Constant
 import com.esurvey.sdk.out.data.LocationState
+import com.esurvey.sdk.out.data.UsbMessageEvent
 import com.esurvey.sdk.out.listener.ESAntennaAuthListener
 import com.esurvey.sdk.out.listener.ESAntennaConnectListener
 import com.esurvey.sdk.out.listener.ESAntennaDisConnectListener
 import com.esurvey.sdk.out.listener.ESAntennaMeasureEnableListener
 import com.esurvey.sdk.out.listener.ESAntennaMeasureListener
+import com.esurvey.sdk.out.listener.ESAntennaOriginMessageListener
+import com.esurvey.sdk.out.listener.ESBluetoothScanResultListener
 import com.esurvey.sdk.out.listener.ESLocationChangeListener
 import com.esurvey.sdk.out.listener.ESMobileHighStatusListener
 import com.esurvey.sdk.out.listener.ESUsbAttachChangeListener
 import com.lxj.xpopup.XPopup
+import com.polidea.rxandroidble2.RxBleDevice
+import com.polidea.rxandroidble2.scan.ScanFilter
+import com.polidea.rxandroidble2.scan.ScanSettings
+import io.reactivex.disposables.Disposable
 import kotlinx.coroutines.launch
-
 
 
 class MainActivity : ComponentActivity() {
@@ -104,10 +109,11 @@ class MainActivity : ComponentActivity() {
     var isConnectSuccessState by mutableStateOf(false)
     var locationSource by mutableStateOf(-1)
 
-    val bluetoothDeviceList = mutableStateListOf<BleDevice>()
+    val bluetoothDeviceList = mutableStateListOf<BluetoothInfo>()
     val logList = mutableStateListOf<String>()
 
     var messageState by mutableStateOf("暂无日志")
+
 
 
     val lon = 112.994693
@@ -241,7 +247,7 @@ class MainActivity : ComponentActivity() {
                     LazyColumn {
                         items(bluetoothDeviceList.size) { it ->
                             ListItem(
-                                headlineContent = { Text(bluetoothDeviceList[it].bleName) },
+                                headlineContent = { Text(bluetoothDeviceList[it].name!!) },
                                 leadingContent = {
                                     Icon(
                                         painter = painterResource(R.drawable.icon_bluetooth),
@@ -258,7 +264,7 @@ class MainActivity : ComponentActivity() {
                                         lat
                                     )
                                     syncLog("正在连接蓝牙设备")
-                                    instance.getBleInstance(this@MainActivity).stopScan()
+                                    instance.stopBluetoothScan()
                                     bluetoothDeviceList.clear()
                                 }
                             )
@@ -276,6 +282,7 @@ class MainActivity : ComponentActivity() {
         AnimatedVisibility(logList.isNotEmpty()) {
             Card(
                 Modifier
+                    .padding(horizontal = 10.dp)
                     .fillMaxWidth()
                     .padding(top = 10.dp)) {
 
@@ -329,10 +336,17 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     fun MeasureBox() {
-        Card(Modifier.padding(top = 10.dp).fillMaxWidth()) {
+        Card(
+            Modifier
+                .padding(top = 10.dp)
+                .fillMaxWidth()) {
             Spacer(Modifier.padding(top = 10.dp))
             Text("激光测距",  modifier = Modifier.padding(start = 10.dp))
-            Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp).padding(bottom = 10.dp), horizontalArrangement = Arrangement.SpaceAround) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp)
+                    .padding(bottom = 10.dp), horizontalArrangement = Arrangement.SpaceAround) {
                 Button(onClick = {
                     instance.enableMeasure(object : ESAntennaMeasureEnableListener {
                         override fun onStart() {
@@ -596,21 +610,17 @@ class MainActivity : ComponentActivity() {
 
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             Button(onClick = {
-                val bleInstance = instance.getBleInstance(this@MainActivity)
-                bleInstance.startScan(object : BleScanCallback<BleDevice>() {
-                    override fun onLeScan(device: BleDevice?, rssi: Int, scanRecord: ByteArray?) {
-                        if (device == null) {
-                            return
+
+                instance.startBluetoothScan(this@MainActivity,
+                    object : ESBluetoothScanResultListener {
+                        override fun onChange(info: BluetoothInfo) {
+                            if (bluetoothDeviceList.find { it -> it.name == info.name } == null) {
+                                bluetoothDeviceList.add(info)
+                            }
                         }
-                        if (device.bleName.isNullOrEmpty()) {
-                            return
-                        }
-                        if (bluetoothDeviceList.contains(device)) {
-                            return
-                        }
-                        bluetoothDeviceList.add(device)
-                    }
-                })
+                    })
+
+
 
             }, enabled = !bluetoothFlag) {
                 Text("蓝牙连接")
