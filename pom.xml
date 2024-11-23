@@ -9,7 +9,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>cn.sodbs</groupId>
   <artifactId>esurvey_sdk</artifactId>
-  <version>0.2</version>
+  <version>0.95</version>
   <packaging>aar</packaging>
   <build>
     <plugins>
@@ -31,9 +31,9 @@
   </build>
   <dependencies>
     <dependency>
-      <groupId>com.github.aicareles</groupId>
-      <artifactId>Android-BLE</artifactId>
-      <version>3.3.1</version>
+      <groupId>com.polidea.rxandroidble2</groupId>
+      <artifactId>rxandroidble</artifactId>
+      <version>1.19.0</version>
       <scope>compile</scope>
     </dependency>
     <dependency>
