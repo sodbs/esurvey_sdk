@@ -1,7 +1,9 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
 
-package com.esurvey.esurvey_sdk_demo
+package com.esurvey.esurvey_sdk_demo;
 
+
+import android.bluetooth.BluetoothAdapter
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
@@ -55,6 +57,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import com.esurvey.esurvey_sdk_demo.ui.theme.Esurvey_sdk_demoTheme
 import com.esurvey.sdk.out.ESurvey
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -72,7 +75,6 @@ import com.blankj.utilcode.util.ClipboardUtils
 import com.blankj.utilcode.util.PermissionUtils
 import com.blankj.utilcode.util.SDCardUtils
 import com.blankj.utilcode.util.ToastUtils
-import com.esurvey.esurvey_sdk_demo.ui.theme.Esurvey_sdk_demoTheme
 import com.esurvey.sdk.out.ByteUtils
 import com.esurvey.sdk.out.data.BluetoothInfo
 import com.esurvey.sdk.out.data.Constant
@@ -278,7 +280,6 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     fun LogBox() {
-
         AnimatedVisibility(logList.isNotEmpty()) {
             Card(
                 Modifier
@@ -299,7 +300,6 @@ class MainActivity : ComponentActivity() {
                     Icon(Icons.Default.Build, contentDescription = "", modifier = Modifier.clickable {
                         val joinToString = logList.joinToString("|")
                         ClipboardUtils.copyText(joinToString)
-                        syncLog("复制成功")
                     })
 
                 }
@@ -317,7 +317,6 @@ class MainActivity : ComponentActivity() {
                                 contentDescription = "",
                                 modifier = Modifier.clickable {
                                     ClipboardUtils.copyText(logList[it])
-                                    syncLog("复制成功")
                                 })
                         }
                     }
@@ -426,7 +425,7 @@ class MainActivity : ComponentActivity() {
             } else {
                 Button(onClick = {
                     val start = {
-                        val rtkUserId = ""
+                        val rtkUserId = "" + "_" + ""
                         val rtkSecret = ""
                         if (rtkSecret.isEmpty() || rtkUserId.isEmpty()) {
                             syncLog("请先配置rtkUserId和rtkSecret")
@@ -610,7 +609,16 @@ class MainActivity : ComponentActivity() {
 
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             Button(onClick = {
+                val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+                if (bluetoothAdapter == null) {
+                    // 设备不支持蓝牙
+                    ToastUtils.showShort("设备不支持蓝牙")
+                } else if (!bluetoothAdapter.isEnabled()) {
+                    // 蓝牙未启用
+                    ToastUtils.showShort("请先开启蓝牙")
 
+                    return@Button
+                }
                 instance.startBluetoothScan(this@MainActivity,
                     object : ESBluetoothScanResultListener {
                         override fun onChange(info: BluetoothInfo) {

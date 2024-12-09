@@ -9,7 +9,7 @@ android {
 
     defaultConfig {
         applicationId "com.esurvey.esurvey_sdk_demo"
-        minSdk 26
+        minSdk 23
         targetSdk 34
         versionCode 1
         versionName "1.0"
@@ -65,7 +65,7 @@ dependencies {
     debugImplementation libs.androidx.ui.test.manifest
     implementation ("com.github.li-xiaojun:XPopup:2.9.19")
 
-    implementation 'com.github.sodbs:esurvey_sdk:0.95'
+    implementation 'com.github.sodbs:esurvey_sdk:1.0'
     implementation ("com.blankj:utilcodex:1.31.1")
 
     implementation 'joda-time:joda-time:2.10.6'
