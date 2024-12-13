@@ -430,14 +430,11 @@ class MainActivity : ComponentActivity() {
                         if (rtkSecret.isEmpty() || rtkUserId.isEmpty()) {
                             syncLog("请先配置rtkUserId和rtkSecret")
                         } else {
-                            val sdCardPathByEnvironment =
-                                SDCardUtils.getSDCardPathByEnvironment()
                             mobileHighIsStart = true
                             instance.startMobileHighLocation(
                                 this@MainActivity,
                                 rtkUserId,
-                                rtkSecret,
-                                sdCardPathByEnvironment
+                                rtkSecret
                             )
                         }
                     }
