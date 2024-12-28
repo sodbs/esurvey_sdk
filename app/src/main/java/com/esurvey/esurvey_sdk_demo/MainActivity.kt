@@ -1,7 +1,6 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
 
-package com.esurvey.esurvey_sdk_demo;
-
+package com.esurvey.esurvey_sdk_demo
 
 import android.bluetooth.BluetoothAdapter
 import android.content.Intent
@@ -57,7 +56,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
-import com.esurvey.esurvey_sdk_demo.ui.theme.Esurvey_sdk_demoTheme
 import com.esurvey.sdk.out.ESurvey
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -69,12 +67,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.lifecycleScope
 import com.blankj.utilcode.util.ActivityUtils
 import com.blankj.utilcode.util.AppUtils
 import com.blankj.utilcode.util.ClipboardUtils
+import com.blankj.utilcode.util.NetworkUtils
 import com.blankj.utilcode.util.PermissionUtils
 import com.blankj.utilcode.util.SDCardUtils
 import com.blankj.utilcode.util.ToastUtils
+import com.esurvey.esurvey_sdk.utils.Api
+import com.esurvey.esurvey_sdk_demo.ui.theme.Esurvey_sdk_demoTheme
 import com.esurvey.sdk.out.ByteUtils
 import com.esurvey.sdk.out.data.BluetoothInfo
 import com.esurvey.sdk.out.data.Constant
@@ -95,6 +97,7 @@ import com.polidea.rxandroidble2.RxBleDevice
 import com.polidea.rxandroidble2.scan.ScanFilter
 import com.polidea.rxandroidble2.scan.ScanSettings
 import io.reactivex.disposables.Disposable
+import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
 
 
@@ -102,6 +105,7 @@ class MainActivity : ComponentActivity() {
     val instance = ESurvey.getInstance()
 
     var bluetoothFlag by mutableStateOf(false)
+    var isSurfaceSwitch by mutableStateOf(false)
     var measureFlag by mutableStateOf(false)
     var usbFlag by mutableStateOf(false)
 
@@ -122,9 +126,14 @@ class MainActivity : ComponentActivity() {
     val lat = 28.149546
 
 
+    val appUserId = "123"
+
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        instance.setKey(Api.key)
 
         instance.setOnUsbAttachChangeListener(object : ESUsbAttachChangeListener {
             override fun onChange(isAttach: Boolean) {
@@ -135,6 +144,17 @@ class MainActivity : ComponentActivity() {
         onPermissionRequest()
         TipsSoundsService.init(this)
 
+
+        MainScope().launch{
+            Api.getAppToken{
+                this@MainActivity.runOnUiThread{
+                    XPopup.Builder(this@MainActivity)
+                        .asConfirm("获取APPTOKEN 失败", "获取APPTOKEN 失败，无法启动手机高精度，天线也只能使用FM版", "", "确定", {
+                        }, {}, true)
+                        .show()
+                }
+            }
+        }
         setContent {
             Esurvey_sdk_demoTheme {
                 val rememberDrawerState = rememberDrawerState(DrawerValue.Closed)
@@ -148,7 +168,6 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 ) {
-
                     val scope = rememberCoroutineScope()
                     Scaffold(
                         floatingActionButton = {
@@ -170,11 +189,16 @@ class MainActivity : ComponentActivity() {
                                 .padding(contentPadding)
                                 .padding(horizontal = 20.dp, vertical = 20.dp)
                         ) {
-                            if (permissionFlag) {
-                                App()
+                            if (Api.key.isEmpty() || Api.secret.isEmpty()) {
+                                NoKeyApp()
                             } else {
-                                UnPermissionApp()
+                                if (permissionFlag) {
+                                    App()
+                                } else {
+                                    UnPermissionApp()
+                                }
                             }
+
                         }
                     }
                 }
@@ -230,6 +254,22 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+
+    @Composable
+    fun NoKeyApp() {
+        Column(
+            Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Button(onClick = {
+                AppUtils.exitApp()
+            }) {
+                Text("请先在Demo里 com.esurvey.esurvey_sdk.utils.Key 中配置 key 和 secret， 配置完再重启应用")
+            }
+        }
+    }
+
     @Composable
     fun App() {
 
@@ -263,7 +303,9 @@ class MainActivity : ComponentActivity() {
                                         this@MainActivity,
                                         bluetoothDeviceList[it],
                                         lon,
-                                        lat
+                                        lat,
+                                        appUserId,
+                                        Api.sdkToken
                                     )
                                     syncLog("正在连接蓝牙设备")
                                     instance.stopBluetoothScan()
@@ -280,6 +322,15 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     fun LogBox() {
+        LaunchedEffect(true) {
+            instance.setOnAntennaOriginMessageListener(object : ESAntennaOriginMessageListener {
+                override fun onMessage(message: String) {
+                    logList.add(0, message)
+                }
+
+            })
+        }
+
         AnimatedVisibility(logList.isNotEmpty()) {
             Card(
                 Modifier
@@ -407,7 +458,6 @@ class MainActivity : ComponentActivity() {
                         mobileHighIsStart = false
                     }
                 }
-
                 override fun onPlaySounds(soundType: Int) {
                     TipsSoundsService.getInstance().playJtSounds(soundType)
                 }
@@ -425,17 +475,22 @@ class MainActivity : ComponentActivity() {
             } else {
                 Button(onClick = {
                     val start = {
-                        val rtkUserId = "" + "_" + ""
-                        val rtkSecret = ""
-                        if (rtkSecret.isEmpty() || rtkUserId.isEmpty()) {
-                            syncLog("请先配置rtkUserId和rtkSecret")
-                        } else {
-                            mobileHighIsStart = true
-                            instance.startMobileHighLocation(
-                                this@MainActivity,
-                                rtkUserId,
-                                rtkSecret
-                            )
+                        mobileHighIsStart = true
+                        lifecycleScope.launch{
+                            Api.getSdkToken(appUserId) { flag ->
+                                this@MainActivity.runOnUiThread{
+                                    instance.startMobileHighLocation(
+                                        this@MainActivity,
+                                        appUserId,
+                                        Api.sdkToken
+                                    )
+                                    if (!flag) {
+                                        syncLog("获取SDKToen 失败无法启动手机高精度")
+                                        mobileHighIsStart = false
+                                    }
+                                }
+                            }
+
                         }
                     }
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -508,12 +563,37 @@ class MainActivity : ComponentActivity() {
         var showLocation by remember {
             mutableStateOf(true)
         }
-        if (locationState != null) {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                SuggestionChip(
-                    onClick = { },
-                    label = { Text("Lon / Lat ${locationState?.lon} - ${locationState?.lat}") }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+            modifier = Modifier
+                .padding(top = 10.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(
+                    MaterialTheme.colorScheme.primaryContainer
                 )
+                .padding(horizontal = 6.dp)
+        ) {
+            Text("平面坐标")
+            Switch(isSurfaceSwitch, onCheckedChange = {
+                isSurfaceSwitch = it
+            } )
+        }
+        if (locationState != null) {
+
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                if (isSurfaceSwitch) {
+                    val doubles = GaussConvert.BL_xy3(locationState?.lat?.toDouble()!!, locationState?.lon?.toDouble()!!);
+                    SuggestionChip(
+                        onClick = { },
+                        label = { Text("x / y ${"%.2f".format(doubles[0])} - ${"%.2f".format(doubles[1])}") }
+                    )
+                } else {
+                    SuggestionChip(
+                        onClick = { },
+                        label = { Text("Lon / Lat ${locationState?.lon} - ${locationState?.lat}") }
+                    )
+                }
                 SuggestionChip(
                     onClick = { },
                     label = { Text("水平误差 ±${"%.2f".format(locationState?.getxInaccuracies())}m") }
@@ -575,7 +655,15 @@ class MainActivity : ComponentActivity() {
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             if (!usbFlag) {
                 Button(onClick = {
-                    instance.usbConnect(this@MainActivity, lon, lat, autoBluetoothFlag)
+                    if (Api.appToken.isEmpty()) {
+                        ToastUtils.showShort("无法获取到AppToken, FM信号弱的情况下可能无法固定解")
+                    }
+                    lifecycleScope.launch{
+                        syncLog("正在获取SDKToken")
+                        Api.getSdkToken(appUserId) { flag ->
+                            instance.usbConnect(this@MainActivity, lon, lat, autoBluetoothFlag, appUserId, Api.sdkToken)
+                        }
+                    }
                 }, enabled = usbAttachFlag && !usbFlag) {
                     Text("连接天线")
                 }
@@ -603,30 +691,34 @@ class MainActivity : ComponentActivity() {
     @Composable
     fun BlueToothBox() {
 
-
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             Button(onClick = {
-                val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
-                if (bluetoothAdapter == null) {
-                    // 设备不支持蓝牙
-                    ToastUtils.showShort("设备不支持蓝牙")
-                } else if (!bluetoothAdapter.isEnabled()) {
-                    // 蓝牙未启用
-                    ToastUtils.showShort("请先开启蓝牙")
-
-                    return@Button
+                if (Api.appToken.isEmpty()) {
+                    ToastUtils.showShort("无法获取到AppToken, FM信号弱的情况下可能无法固定解")
                 }
-                instance.startBluetoothScan(this@MainActivity,
-                    object : ESBluetoothScanResultListener {
-                        override fun onChange(info: BluetoothInfo) {
-                            if (bluetoothDeviceList.find { it -> it.name == info.name } == null) {
-                                bluetoothDeviceList.add(info)
-                            }
+                lifecycleScope.launch{
+                    syncLog("正在获取SDKToken")
+                    Api.getSdkToken(appUserId) { flag ->
+                        val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+                        if (bluetoothAdapter == null) {
+                            // 设备不支持蓝牙
+                            ToastUtils.showShort("设备不支持蓝牙")
+                            return@getSdkToken
+                        } else if (!bluetoothAdapter.isEnabled()) {
+                            // 蓝牙未启用
+                            ToastUtils.showShort("请先开启蓝牙")
+                            return@getSdkToken
                         }
-                    })
-
-
-
+                        instance.startBluetoothScan(this@MainActivity,
+                            object : ESBluetoothScanResultListener {
+                                override fun onChange(info: BluetoothInfo) {
+                                    if (bluetoothDeviceList.find { it -> it.name == info.name } == null) {
+                                        bluetoothDeviceList.add(info)
+                                    }
+                                }
+                            })
+                    }
+                }
             }, enabled = !bluetoothFlag) {
                 Text("蓝牙连接")
             }
