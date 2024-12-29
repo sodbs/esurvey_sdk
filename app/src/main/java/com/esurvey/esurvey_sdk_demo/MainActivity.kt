@@ -1,6 +1,7 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
 
-package com.esurvey.esurvey_sdk_demo
+package com.esurvey.esurvey_sdk_demo;
+
 
 import android.bluetooth.BluetoothAdapter
 import android.content.Intent
@@ -22,9 +23,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -36,6 +39,7 @@ import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -56,8 +60,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import com.esurvey.esurvey_sdk.ui.theme.Esurvey_sdk_demoTheme
 import com.esurvey.sdk.out.ESurvey
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -67,6 +73,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.lifecycleScope
 import com.blankj.utilcode.util.ActivityUtils
 import com.blankj.utilcode.util.AppUtils
@@ -88,6 +95,7 @@ import com.esurvey.sdk.out.listener.ESAntennaDisConnectListener
 import com.esurvey.sdk.out.listener.ESAntennaMeasureEnableListener
 import com.esurvey.sdk.out.listener.ESAntennaMeasureListener
 import com.esurvey.sdk.out.listener.ESAntennaOriginMessageListener
+import com.esurvey.sdk.out.listener.ESAntennaOtaListener
 import com.esurvey.sdk.out.listener.ESBluetoothScanResultListener
 import com.esurvey.sdk.out.listener.ESLocationChangeListener
 import com.esurvey.sdk.out.listener.ESMobileHighStatusListener
@@ -140,6 +148,8 @@ class MainActivity : ComponentActivity() {
                 usbAttachFlag = isAttach
             }
         })
+
+
 
         onPermissionRequest()
         TipsSoundsService.init(this)
@@ -238,6 +248,55 @@ class MainActivity : ComponentActivity() {
             .request()
     }
 
+    var isOta by mutableStateOf(false)
+    var otaPercent by mutableIntStateOf(0)
+
+
+    @Composable
+    fun Ota() {
+        LaunchedEffect(true) {
+            instance.setOnAntennaOtaListener(object: ESAntennaOtaListener {
+                override fun onStart() {
+                    isOta = true
+                }
+
+                override fun onEnd(isSuccess: Boolean, message: String) {
+                    isOta = false
+                    ToastUtils.showLong(message)
+                }
+
+                override fun onProgress(percent: Int) {
+                    otaPercent = percent
+                }
+
+            })
+        }
+
+
+        if (isOta) {
+            Dialog(onDismissRequest = {  }) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(375.dp)
+                        .padding(16.dp),
+                    shape = RoundedCornerShape(16.dp),
+                ) {
+                    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.width(64.dp),
+                            color = MaterialTheme.colorScheme.secondary,
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                            progress = { otaPercent / 100f },
+                        )
+                        Text("${otaPercent}%", modifier = Modifier.padding(top = 40.dp))
+                        Text("固件升级中，请稍后", modifier = Modifier.padding(top = 10.dp))
+                    }
+                }
+            }
+        }
+
+    }
 
     @Composable
     fun UnPermissionApp() {
@@ -281,6 +340,7 @@ class MainActivity : ComponentActivity() {
             BlueToothBox()
             MobileHighLocation()
             MeasureBox()
+            Ota()
 
             if (bluetoothDeviceList.isNotEmpty()) {
                 ModalBottomSheet(onDismissRequest = {
