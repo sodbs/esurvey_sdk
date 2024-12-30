@@ -60,7 +60,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
-import com.esurvey.esurvey_sdk.ui.theme.Esurvey_sdk_demoTheme
 import com.esurvey.sdk.out.ESurvey
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -73,6 +72,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.lifecycleScope
 import com.blankj.utilcode.util.ActivityUtils
@@ -87,8 +87,10 @@ import com.esurvey.esurvey_sdk_demo.ui.theme.Esurvey_sdk_demoTheme
 import com.esurvey.sdk.out.ByteUtils
 import com.esurvey.sdk.out.data.BluetoothInfo
 import com.esurvey.sdk.out.data.Constant
+import com.esurvey.sdk.out.data.EAntennaDeviceInfo
 import com.esurvey.sdk.out.data.LocationState
 import com.esurvey.sdk.out.data.UsbMessageEvent
+import com.esurvey.sdk.out.exception.EsException
 import com.esurvey.sdk.out.listener.ESAntennaAuthListener
 import com.esurvey.sdk.out.listener.ESAntennaConnectListener
 import com.esurvey.sdk.out.listener.ESAntennaDisConnectListener
@@ -252,12 +254,14 @@ class MainActivity : ComponentActivity() {
     var otaPercent by mutableIntStateOf(0)
 
 
+    var deviceInfo by mutableStateOf<EAntennaDeviceInfo?>(null)
     @Composable
     fun Ota() {
         LaunchedEffect(true) {
             instance.setOnAntennaOtaListener(object: ESAntennaOtaListener {
                 override fun onStart() {
                     isOta = true
+                    deviceInfo = instance.deviceInfo
                 }
 
                 override fun onEnd(isSuccess: Boolean, message: String) {
@@ -283,6 +287,7 @@ class MainActivity : ComponentActivity() {
                     shape = RoundedCornerShape(16.dp),
                 ) {
                     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+
                         CircularProgressIndicator(
                             modifier = Modifier.width(64.dp),
                             color = MaterialTheme.colorScheme.secondary,
@@ -291,6 +296,8 @@ class MainActivity : ComponentActivity() {
                         )
                         Text("${otaPercent}%", modifier = Modifier.padding(top = 40.dp))
                         Text("固件升级中，请稍后", modifier = Modifier.padding(top = 10.dp))
+                        Text("设备型号: ${deviceInfo!!.deviceType}", modifier = Modifier.padding(top = 10.dp), fontSize = 10.sp)
+                        Text("当前设备版本号: ${deviceInfo!!.version}", modifier = Modifier.padding(top = 4.dp), fontSize = 10.sp)
                     }
                 }
             }
@@ -359,17 +366,22 @@ class MainActivity : ComponentActivity() {
                                     )
                                 },
                                 modifier = Modifier.clickable {
-                                    instance.bluetoothConnect(
-                                        this@MainActivity,
-                                        bluetoothDeviceList[it],
-                                        lon,
-                                        lat,
-                                        appUserId,
-                                        Api.sdkToken
-                                    )
-                                    syncLog("正在连接蓝牙设备")
-                                    instance.stopBluetoothScan()
-                                    bluetoothDeviceList.clear()
+                                    try {
+                                        instance.bluetoothConnect(
+                                            this@MainActivity,
+                                            bluetoothDeviceList[it],
+                                            lon,
+                                            lat,
+                                            appUserId,
+                                            Api.sdkToken
+                                        )
+                                        syncLog("正在连接蓝牙设备")
+                                        instance.stopBluetoothScan()
+                                        bluetoothDeviceList.clear()
+                                    } catch (e: EsException) {
+                                        // appUserId 或者 Key 未传将抛出异常
+                                        syncLog(" appUserId 或者 Key 未传将抛出异常:${e.message}")
+                                    }
                                 }
                             )
                             HorizontalDivider()
@@ -539,13 +551,19 @@ class MainActivity : ComponentActivity() {
                         lifecycleScope.launch{
                             Api.getSdkToken(appUserId) { flag ->
                                 this@MainActivity.runOnUiThread{
-                                    instance.startMobileHighLocation(
-                                        this@MainActivity,
-                                        appUserId,
-                                        Api.sdkToken
-                                    )
-                                    if (!flag) {
-                                        syncLog("获取SDKToen 失败无法启动手机高精度")
+                                    try {
+                                        instance.startMobileHighLocation(
+                                            this@MainActivity,
+                                            appUserId,
+                                            Api.sdkToken
+                                        )
+                                        if (!flag) {
+                                            syncLog("获取SDKToen 失败无法启动手机高精度")
+                                            mobileHighIsStart = false
+                                        }
+                                    }  catch (e: EsException) {
+                                        // appUserId 或者 Key 未传将抛出异常
+                                        syncLog(" appUserId 或者 Key 未传将抛出异常:${e.message}")
                                         mobileHighIsStart = false
                                     }
                                 }
@@ -721,7 +739,12 @@ class MainActivity : ComponentActivity() {
                     lifecycleScope.launch{
                         syncLog("正在获取SDKToken")
                         Api.getSdkToken(appUserId) { flag ->
-                            instance.usbConnect(this@MainActivity, lon, lat, autoBluetoothFlag, appUserId, Api.sdkToken)
+                            try {
+                                instance.usbConnect(this@MainActivity, lon, lat, autoBluetoothFlag, appUserId, Api.sdkToken)
+                            } catch (e: EsException) {
+                                // appUserId 或者 Key 未传将抛出异常
+                                syncLog("USB连接失败: ${e.message}")
+                            }
                         }
                     }
                 }, enabled = usbAttachFlag && !usbFlag) {
