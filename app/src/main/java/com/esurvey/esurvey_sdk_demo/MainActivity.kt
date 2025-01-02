@@ -109,6 +109,7 @@ import com.polidea.rxandroidble2.scan.ScanSettings
 import io.reactivex.disposables.Disposable
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
+import kotlin.random.Random
 
 
 class MainActivity : ComponentActivity() {
@@ -136,7 +137,8 @@ class MainActivity : ComponentActivity() {
     val lat = 28.149546
 
 
-    val appUserId = "123"
+    val appUserId = System.nanoTime().toString() + "_demo_" + Random.nextInt(1, 999999)
+
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
