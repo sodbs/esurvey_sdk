@@ -863,7 +863,8 @@ class MainActivity : ComponentActivity() {
                         isConnectSuccessState = false
                         locationState = null
                         measureFlag = false
-
+                        otaPercent = 0
+                        isOta = false
                     }
                     if (disConnectSource == Constant.ANTENNA_SOURCE_BLUETOOTH) {
                         bluetoothFlag = false
