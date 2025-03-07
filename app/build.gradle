@@ -65,7 +65,7 @@ dependencies {
     debugImplementation libs.androidx.ui.test.manifest
     implementation ("com.github.li-xiaojun:XPopup:2.9.19")
 
-    implementation 'com.github.sodbs:esurvey_sdk:2.3'
+    implementation 'com.github.sodbs:esurvey_sdk:2.4'
     implementation ("com.blankj:utilcodex:1.31.1")
 
     implementation 'joda-time:joda-time:2.10.6'
