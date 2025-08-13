@@ -14,12 +14,11 @@ import org.json.JSONObject
  * @create: 2024-12-26 15:46
  **/
 object Api {
-
-    private const val BASE_URL = "https://www.sobds.com"
-
-
-
     //=============================在这里填写你们自己申请的SDK===========================================//
+
+    // BaseUrl 有两种，开放平台和问北平台，请按需配置
+    private const val BASE_URL = "https://www.sobds.com"
+//    private const val BASE_URL = "https://www.sobds.com"
     const val key = ""
     const val secret = ""
     //========================================================================//

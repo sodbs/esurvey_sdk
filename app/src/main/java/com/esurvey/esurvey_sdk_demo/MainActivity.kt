@@ -1,8 +1,8 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
 
-package com.esurvey.esurvey_sdk_demo;
+package com.esurvey.esurvey_sdk_demo
 
-
+import android.Manifest
 import android.bluetooth.BluetoothAdapter
 import android.content.Intent
 import android.os.Build
@@ -25,18 +25,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Done
-import androidx.compose.material.icons.filled.ThumbUp
-import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -50,7 +45,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Switch
@@ -60,8 +54,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import com.esurvey.sdk.out.ESurvey
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
@@ -69,7 +65,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -78,18 +74,14 @@ import androidx.lifecycle.lifecycleScope
 import com.blankj.utilcode.util.ActivityUtils
 import com.blankj.utilcode.util.AppUtils
 import com.blankj.utilcode.util.ClipboardUtils
-import com.blankj.utilcode.util.NetworkUtils
 import com.blankj.utilcode.util.PermissionUtils
-import com.blankj.utilcode.util.SDCardUtils
 import com.blankj.utilcode.util.ToastUtils
 import com.esurvey.esurvey_sdk.utils.Api
-import com.esurvey.esurvey_sdk_demo.ui.theme.Esurvey_sdk_demoTheme
-import com.esurvey.sdk.out.ByteUtils
 import com.esurvey.sdk.out.data.BluetoothInfo
 import com.esurvey.sdk.out.data.Constant
 import com.esurvey.sdk.out.data.EAntennaDeviceInfo
+import com.esurvey.sdk.out.data.ESEnvironment
 import com.esurvey.sdk.out.data.LocationState
-import com.esurvey.sdk.out.data.UsbMessageEvent
 import com.esurvey.sdk.out.exception.EsException
 import com.esurvey.sdk.out.listener.ESAntennaAuthListener
 import com.esurvey.sdk.out.listener.ESAntennaConnectListener
@@ -98,33 +90,54 @@ import com.esurvey.sdk.out.listener.ESAntennaMeasureEnableListener
 import com.esurvey.sdk.out.listener.ESAntennaMeasureListener
 import com.esurvey.sdk.out.listener.ESAntennaOriginMessageListener
 import com.esurvey.sdk.out.listener.ESAntennaOtaListener
+import com.esurvey.sdk.out.listener.ESBatteryQueryListener
 import com.esurvey.sdk.out.listener.ESBluetoothScanResultListener
+import com.esurvey.sdk.out.listener.ESDeviceSettingListener
+import com.esurvey.sdk.out.listener.ESDeviceWifiModeChangeListener
+import com.esurvey.sdk.out.listener.ESDeviceWifiModeQueryListener
+import com.esurvey.sdk.out.listener.ESGNSSModeChangeListener
+import com.esurvey.sdk.out.listener.ESGNSSModeQueryListener
 import com.esurvey.sdk.out.listener.ESLocationChangeListener
 import com.esurvey.sdk.out.listener.ESMobileHighStatusListener
 import com.esurvey.sdk.out.listener.ESUsbAttachChangeListener
 import com.lxj.xpopup.XPopup
-import com.polidea.rxandroidble2.RxBleDevice
-import com.polidea.rxandroidble2.scan.ScanFilter
-import com.polidea.rxandroidble2.scan.ScanSettings
-import io.reactivex.disposables.Disposable
 import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.random.Random
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CardDefaults
+import androidx.compose.foundation.layout.RowScope
+import com.esurvey.esurvey_sdk_demo.ui.theme.Esurvey_sdk_demoTheme
+import com.esurvey.esurvey_sdk_demo.BuildConfig
+import kotlin.text.format
 
 
 class MainActivity : ComponentActivity() {
+    // 环境Key
+
     val instance = ESurvey.getInstance()
 
     var bluetoothFlag by mutableStateOf(false)
     var isSurfaceSwitch by mutableStateOf(false)
+    var isSimpleDataSwitch by mutableStateOf(false)
+    var deviceHeight by mutableDoubleStateOf(0.0)
     var measureFlag by mutableStateOf(false)
     var usbFlag by mutableStateOf(false)
+
+    // GNSS工作模式 0：流动站 1：基准站
+    var gnssWorkMode by mutableIntStateOf(0)
+
+    // wifiMode 0：内置天线 1：外置天线
+    var wifiMode by mutableIntStateOf(0)
 
     var locationState by mutableStateOf<LocationState?>(null)
     var usbAttachFlag by mutableStateOf(false)
     var permissionFlag by mutableStateOf(false)
     var isConnectSuccessState by mutableStateOf(false)
-    var locationSource by mutableStateOf(-1)
+    var locationSource by mutableIntStateOf(-1)
 
     val bluetoothDeviceList = mutableStateListOf<BluetoothInfo>()
     val logList = mutableStateListOf<String>()
@@ -132,19 +145,21 @@ class MainActivity : ComponentActivity() {
     var messageState by mutableStateOf("暂无日志")
 
 
-
     val lon = 112.994693
     val lat = 28.149546
 
 
-    val appUserId = System.nanoTime().toString() + "_demo_" + Random.nextInt(1, 999999)
-
+    val appUserId = System.nanoTime().toString() + Random.nextInt(1, 999999)
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+
+        if (BuildConfig.FLAVOR == AppFlavor.GUANG_DONG) {
+            instance.setEnvironment(ESEnvironment.GUANG_DONG)
+        }
         instance.setKey(Api.key)
 
         instance.setOnUsbAttachChangeListener(object : ESUsbAttachChangeListener {
@@ -154,17 +169,24 @@ class MainActivity : ComponentActivity() {
         })
 
 
-
         onPermissionRequest()
         TipsSoundsService.init(this)
 
 
-        MainScope().launch{
-            Api.getAppToken{
-                this@MainActivity.runOnUiThread{
+        MainScope().launch {
+            Api.getAppToken {
+                this@MainActivity.runOnUiThread {
                     XPopup.Builder(this@MainActivity)
-                        .asConfirm("获取APPTOKEN 失败", "获取APPTOKEN 失败，无法启动手机高精度，天线也只能使用FM版", "", "确定", {
-                        }, {}, true)
+                        .asConfirm(
+                            "获取APPTOKEN 失败",
+                            "获取APPTOKEN 失败，无法启动手机高精度，天线也只能使用FM版",
+                            "",
+                            "确定",
+                            {
+                            },
+                            {},
+                            true
+                        )
                         .show()
                 }
             }
@@ -175,8 +197,13 @@ class MainActivity : ComponentActivity() {
                 ModalNavigationDrawer(
                     drawerState = rememberDrawerState,
                     drawerContent = {
-                        ModalDrawerSheet {
-                            Text("易测", modifier = Modifier.padding(16.dp))
+                        ModalDrawerSheet() {
+                            Text(
+                                when (BuildConfig.FLAVOR) {
+                                    AppFlavor.GUANG_DONG -> "广东易测开放平台"
+                                    else -> "易测"
+                                }, modifier = Modifier.padding(16.dp)
+                            )
                             Spacer(Modifier.padding(vertical = 10.dp))
                             LogBox()
                         }
@@ -186,8 +213,11 @@ class MainActivity : ComponentActivity() {
                     Scaffold(
                         floatingActionButton = {
                             ExtendedFloatingActionButton(
-                                text = { Text("日志") },
-                                icon = { Icon(Icons.Filled.Add, contentDescription = "") },
+                                text = { Text("日志", color = Color.White) },
+                                icon = { Icon(Icons.Filled.Add, contentDescription = "", tint = Color.White) },
+                                containerColor = Color(0xFF3B5F8A),
+                                contentColor = Color.White,
+                                shape = RoundedCornerShape(12.dp),
                                 onClick = {
                                     scope.launch {
                                         rememberDrawerState.apply {
@@ -198,21 +228,29 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                     ) { contentPadding ->
-                        Column(
-                            Modifier
-                                .padding(contentPadding)
-                                .padding(horizontal = 20.dp, vertical = 20.dp)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color(0xFFF3F4F6))
                         ) {
-                            if (Api.key.isEmpty() || Api.secret.isEmpty()) {
-                                NoKeyApp()
-                            } else {
-                                if (permissionFlag) {
-                                    App()
+                            Column(
+                                Modifier
+                                    .padding(contentPadding)
+                                    .align(Alignment.TopCenter)
+                                    .widthIn(max = 360.dp)
+                                    .padding( vertical = 8.dp)
+                            ) {
+                                if (Api.key.isEmpty() || Api.secret.isEmpty()) {
+                                    NoKeyApp()
                                 } else {
-                                    UnPermissionApp()
+                                    if (permissionFlag) {
+                                        App()
+                                    } else {
+                                        UnPermissionApp()
+                                    }
                                 }
-                            }
 
+                            }
                         }
                     }
                 }
@@ -223,13 +261,13 @@ class MainActivity : ComponentActivity() {
 
     private fun onPermissionRequest() {
         val permissions: MutableList<String> = ArrayList()
-        permissions.add(android.Manifest.permission.ACCESS_COARSE_LOCATION)
-        permissions.add(android.Manifest.permission.ACCESS_FINE_LOCATION)
+        permissions.add(Manifest.permission.ACCESS_COARSE_LOCATION)
+        permissions.add(Manifest.permission.ACCESS_FINE_LOCATION)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            permissions.add(android.Manifest.permission.BLUETOOTH_SCAN)
-            permissions.add(android.Manifest.permission.BLUETOOTH_ADVERTISE)
-            permissions.add(android.Manifest.permission.BLUETOOTH_CONNECT)
+            permissions.add(Manifest.permission.BLUETOOTH_SCAN)
+            permissions.add(Manifest.permission.BLUETOOTH_ADVERTISE)
+            permissions.add(Manifest.permission.BLUETOOTH_CONNECT)
         }
 
         PermissionUtils.permission(
@@ -257,10 +295,11 @@ class MainActivity : ComponentActivity() {
 
 
     var deviceInfo by mutableStateOf<EAntennaDeviceInfo?>(null)
+
     @Composable
     fun Ota() {
         LaunchedEffect(true) {
-            instance.setOnAntennaOtaListener(object: ESAntennaOtaListener {
+            instance.setOnAntennaOtaListener(object : ESAntennaOtaListener {
                 override fun onStart() {
                     isOta = true
                     deviceInfo = instance.deviceInfo
@@ -280,15 +319,20 @@ class MainActivity : ComponentActivity() {
 
 
         if (isOta) {
-            Dialog(onDismissRequest = {  }) {
+            Dialog(onDismissRequest = { }) {
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(375.dp)
                         .padding(16.dp),
                     shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White)
                 ) {
-                    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                    Column(
+                        Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
 
                         CircularProgressIndicator(
                             modifier = Modifier.width(64.dp),
@@ -298,8 +342,16 @@ class MainActivity : ComponentActivity() {
                         )
                         Text("${otaPercent}%", modifier = Modifier.padding(top = 40.dp))
                         Text("固件升级中，请稍后", modifier = Modifier.padding(top = 10.dp))
-                        Text("设备型号: ${deviceInfo!!.deviceType}", modifier = Modifier.padding(top = 10.dp), fontSize = 10.sp)
-                        Text("当前设备版本号: ${deviceInfo!!.version}", modifier = Modifier.padding(top = 4.dp), fontSize = 10.sp)
+                        Text(
+                            "设备型号: ${deviceInfo!!.deviceType}",
+                            modifier = Modifier.padding(top = 10.dp),
+                            fontSize = 10.sp
+                        )
+                        Text(
+                            "当前设备版本号: ${deviceInfo!!.version}",
+                            modifier = Modifier.padding(top = 4.dp),
+                            fontSize = 10.sp
+                        )
                     }
                 }
             }
@@ -314,7 +366,7 @@ class MainActivity : ComponentActivity() {
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Button(onClick = {
+            PrimaryButton(onClick = {
                 onPermissionRequest()
             }) {
                 Text("请求权限")
@@ -330,7 +382,7 @@ class MainActivity : ComponentActivity() {
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Button(onClick = {
+            PrimaryButton(onClick = {
                 AppUtils.exitApp()
             }) {
                 Text("请先在Demo里 com.esurvey.esurvey_sdk.utils.Key 中配置 key 和 secret， 配置完再重启应用")
@@ -340,17 +392,17 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     fun App() {
-
-
-        Column {
-            StatusBox()
-            LocationBox()
-            USBBox()
-            BlueToothBox()
-            MobileHighLocation()
-            MeasureBox()
+        Column(
+            modifier = Modifier
+                .verticalScroll(rememberScrollState())
+                .padding(vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            DeviceStatusBox()
+            ConnectionControlBox()
+            LocationServiceBox()
+            DeviceFunctionBox()
             Ota()
-
             if (bluetoothDeviceList.isNotEmpty()) {
                 ModalBottomSheet(onDismissRequest = {
                     bluetoothDeviceList.clear()
@@ -359,14 +411,6 @@ class MainActivity : ComponentActivity() {
                         items(bluetoothDeviceList.size) { it ->
                             ListItem(
                                 headlineContent = { Text(bluetoothDeviceList[it].name!!) },
-                                leadingContent = {
-                                    Icon(
-                                        painter = painterResource(R.drawable.icon_bluetooth),
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        contentDescription = "Localized description",
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                },
                                 modifier = Modifier.clickable {
                                     try {
                                         instance.bluetoothConnect(
@@ -381,7 +425,6 @@ class MainActivity : ComponentActivity() {
                                         instance.stopBluetoothScan()
                                         bluetoothDeviceList.clear()
                                     } catch (e: EsException) {
-                                        // appUserId 或者 Key 未传将抛出异常
                                         syncLog(" appUserId 或者 Key 未传将抛出异常:${e.message}")
                                     }
                                 }
@@ -401,7 +444,6 @@ class MainActivity : ComponentActivity() {
                 override fun onMessage(message: String) {
                     logList.add(0, message)
                 }
-
             })
         }
 
@@ -410,119 +452,89 @@ class MainActivity : ComponentActivity() {
                 Modifier
                     .padding(horizontal = 10.dp)
                     .fillMaxWidth()
-                    .padding(top = 10.dp)) {
-
+                    .padding(top = 10.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White)
+            ) {
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .padding(top = 10.dp, end = 10.dp),
+                        .padding(top = 8.dp, end = 8.dp),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    Icon(Icons.Default.Clear, contentDescription = "", modifier = Modifier.clickable {
-                        logList.clear()
-                    })
-                    Spacer(Modifier.padding(horizontal = 2.dp))
-                    Icon(Icons.Default.Build, contentDescription = "", modifier = Modifier.clickable {
-                        val joinToString = logList.joinToString("|")
-                        ClipboardUtils.copyText(joinToString)
-                    })
-
+                    Text(
+                        "清空",
+                        modifier = Modifier.clickable { logList.clear() },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(Modifier.width(16.dp))
+                    Text(
+                        "复制全部",
+                        modifier = Modifier.clickable {
+                            val joinToString = logList.joinToString("\n")
+                            ClipboardUtils.copyText(joinToString)
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 }
                 LazyColumn(
                     Modifier
                         .fillMaxWidth()
-                        .padding(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                        .padding(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     items(logList.size) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(logList[it], modifier = Modifier.weight(1f))
-                            Icon(
-                                Icons.Outlined.Build,
-                                contentDescription = "",
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                logList[it],
+                                modifier = Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            Text(
+                                "复制",
                                 modifier = Modifier.clickable {
                                     ClipboardUtils.copyText(logList[it])
-                                })
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.secondary
+                            )
                         }
                     }
                 }
             }
         }
 
-
         AnimatedVisibility(logList.isEmpty()) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                Text("暂无日志")
+                Text("暂无日志", style = MaterialTheme.typography.bodyMedium)
             }
         }
     }
 
 
     @Composable
-    fun MeasureBox() {
-        Card(
-            Modifier
-                .padding(top = 10.dp)
-                .fillMaxWidth()) {
-            Spacer(Modifier.padding(top = 10.dp))
-            Text("激光测距",  modifier = Modifier.padding(start = 10.dp))
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 10.dp)
-                    .padding(bottom = 10.dp), horizontalArrangement = Arrangement.SpaceAround) {
-                Button(onClick = {
-                    instance.enableMeasure(object : ESAntennaMeasureEnableListener {
-                        override fun onStart() {
-                            measureFlag = true
-                            syncLog("激光测距已可用")
-                        }
-                    })
-                }, enabled = !measureFlag) {
-                    Text("使能")
-                }
-
-                Button(onClick = {
-                    measureFlag = false
-                    instance.disableMeasure()
-                }, enabled = measureFlag) {
-                    Text("停止")
-                }
-
-                Button(onClick = {
-                    /**
-                     * 先使能，再测量
-                     */
-                    instance.measure(object : ESAntennaMeasureListener {
-                        override fun onMeasure(
-                            isSuccess: Boolean,
-                            distance: String
-                        ) {
-                            if (isSuccess) {
-                                syncLog("距离${distance}毫米")
-                                messageState = "距离${distance}毫米"
-                                syncLog("距离${distance}毫米")
-                            } else {
-                                syncLog("测量失败")
-                            }
-                        }
-                    })
-                }, enabled = measureFlag) {
-                    Text("测量")
-                }
-            }
-        }
-    }
-
-
-    @Composable
-    fun MobileHighLocation() {
-
+    fun LocationServiceBox() {
         var mobileHighIsStart by remember {
             mutableStateOf(false)
         }
 
+
+        var mobileAssistLocation by remember {
+            mutableStateOf(false)
+        }
+
+
         LaunchedEffect(true) {
+            instance.setOnLocationStateChangeListener(object : ESLocationChangeListener {
+                override fun onChange(locationStateParam: LocationState) {
+                    locationState = locationStateParam
+                }
+            })
 
             instance.setOnMobileHighStatusChangeListener(object : ESMobileHighStatusListener {
                 override fun onChange(status: Int) {
@@ -532,98 +544,166 @@ class MainActivity : ComponentActivity() {
                         mobileHighIsStart = false
                     }
                 }
+
                 override fun onPlaySounds(soundType: Int) {
                     TipsSoundsService.getInstance().playJtSounds(soundType)
                 }
             })
         }
-        Column {
-            if (mobileHighIsStart) {
-                Button(onClick = {
-                    instance.stopMobileHighLocation()
-                    locationState = null
-                    mobileHighIsStart = false
-                }) {
-                    Text("关闭手机高精度定位")
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White)
+        ) {
+            Column(
+                modifier = Modifier.padding(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    "位置服务",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Light,
+                )
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    CompactToggle("平面坐标", isSurfaceSwitch) { isSurfaceSwitch = it }
+                    CompactToggle("精简信息", isSimpleDataSwitch) { isSimpleDataSwitch = it }
                 }
-            } else {
-                Button(onClick = {
-                    val start = {
-                        mobileHighIsStart = true
-                        lifecycleScope.launch{
-                            Api.getSdkToken(appUserId) { flag ->
-                                this@MainActivity.runOnUiThread{
-                                    try {
-                                        instance.startMobileHighLocation(
-                                            this@MainActivity,
-                                            appUserId,
-                                            Api.sdkToken
-                                        )
-                                        if (!flag) {
-                                            syncLog("获取SDKToen 失败无法启动手机高精度")
-                                            mobileHighIsStart = false
+
+                LocationInfoDisplay()
+
+                // 手机高精度定位控制
+                if (mobileHighIsStart) {
+                    PrimaryButton(
+                        onClick = {
+                            instance.stopMobileHighLocation()
+                            locationState = null
+                            mobileHighIsStart = false
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(32.dp)
+                    ) {
+                        Text("关闭手机高精度定位", style = MaterialTheme.typography.bodySmall)
+                    }
+                } else {
+                    PrimaryButton(
+                        onClick = {
+                            val start = {
+                                mobileHighIsStart = true
+                                lifecycleScope.launch {
+                                    Api.getSdkToken(appUserId) { flag ->
+                                        this@MainActivity.runOnUiThread {
+                                            try {
+                                                instance.startMobileHighLocation(
+                                                    this@MainActivity,
+                                                    appUserId,
+                                                    Api.sdkToken
+                                                )
+                                                if (!flag) {
+                                                    syncLog("获取SDKToen 失败无法启动手机高精度")
+                                                    mobileHighIsStart = false
+                                                }
+                                            } catch (e: EsException) {
+                                                syncLog(" appUserId 或者 Key 未传将抛出异常:${e.message}")
+                                                mobileHighIsStart = false
+                                            }
                                         }
-                                    }  catch (e: EsException) {
-                                        // appUserId 或者 Key 未传将抛出异常
-                                        syncLog(" appUserId 或者 Key 未传将抛出异常:${e.message}")
-                                        mobileHighIsStart = false
                                     }
                                 }
                             }
-
-                        }
-                    }
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                        if (Environment.isExternalStorageManager()) {
-                            start()
-                        } else {
-                            // 无权限，打开权限设置界面
-                            XPopup.Builder(this@MainActivity)
-                                .asConfirm("请先授予文件权限", "请先授予文件权限", "", "确定", {
-                                    try {
-                                        val intent =
-                                            Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
-                                        ActivityUtils.getTopActivity().startActivity(intent)
-                                    } catch (e: Exception) {
-                                        // 在某些设备上，可能需要手动指导用户打开该设置页面
-                                        val intent = Intent(Settings.ACTION_SETTINGS)
-                                        this@MainActivity.startActivity(intent)
-                                    }
-                                }, {}, true)
-                                .show()
-                        }
-                    } else {
-                        PermissionUtils.permission(
-                            android.Manifest.permission.WRITE_EXTERNAL_STORAGE,
-                            android.Manifest.permission.READ_EXTERNAL_STORAGE
-                        )
-                            .callback(object : PermissionUtils.SimpleCallback {
-                                override fun onGranted() {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                if (Environment.isExternalStorageManager()) {
                                     start()
-                                }
-
-                                override fun onDenied() {
+                                } else {
                                     XPopup.Builder(this@MainActivity)
                                         .asConfirm(
                                             "请先授予文件权限",
-                                            "请找到本App,并且打开文件权限",
+                                            "请先授予文件权限",
                                             "",
                                             "确定",
                                             {
-                                                PermissionUtils.launchAppDetailsSettings()
+                                                try {
+                                                    val intent =
+                                                        Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                                                    ActivityUtils.getTopActivity()
+                                                        .startActivity(intent)
+                                                } catch (e: Exception) {
+                                                    val intent = Intent(Settings.ACTION_SETTINGS)
+                                                    this@MainActivity.startActivity(intent)
+                                                }
                                             },
                                             {},
                                             true
                                         )
                                         .show()
                                 }
-                            }).request()
+                            } else {
+                                PermissionUtils.permission(
+                                    Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                                    Manifest.permission.READ_EXTERNAL_STORAGE
+                                )
+                                    .callback(object : PermissionUtils.SimpleCallback {
+                                        override fun onGranted() {
+                                            start()
+                                        }
 
-
+                                        override fun onDenied() {
+                                            XPopup.Builder(this@MainActivity)
+                                                .asConfirm(
+                                                    "请先授予文件权限",
+                                                    "请找到本App,并且打开文件权限",
+                                                    "",
+                                                    "确定",
+                                                    {
+                                                        PermissionUtils.launchAppDetailsSettings()
+                                                    },
+                                                    {},
+                                                    true
+                                                )
+                                                .show()
+                                        }
+                                    }).request()
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(32.dp)
+                    ) {
+                        Text("开启手机高精度定位", style = MaterialTheme.typography.bodySmall)
                     }
+                }
 
-                }) {
-                    Text("开启手机高精度定位")
+                if (BuildConfig.FLAVOR == AppFlavor.GUANG_DONG) {
+                    PrimaryButton(onClick = {
+                        lifecycleScope.launch {
+                            Api.getSdkToken(appUserId) { flag ->
+                                this@MainActivity.runOnUiThread {
+                                    try {
+                                        instance.startAssistLocation(
+                                            this@MainActivity,
+                                            appUserId,
+                                            Api.sdkToken
+                                        )
+                                        if (!flag) {
+                                            syncLog("获取SDKToen 失败无法启动手机辅助定位")
+                                        }
+                                        mobileAssistLocation = true
+                                    } catch (e: EsException) {
+                                        syncLog("手机辅助定位启动失败:${e.message}")
+                                    }
+                                }
+                            }
+                        }
+                    }, enabled = !mobileAssistLocation, modifier = Modifier
+                        .fillMaxWidth()
+                        .height(32.dp)) {
+                        Text(if (mobileAssistLocation) "已使用手机位置辅助定位" else "使用手机位置辅助定位", style = MaterialTheme.typography.bodySmall)
+                    }
                 }
             }
         }
@@ -631,192 +711,498 @@ class MainActivity : ComponentActivity() {
 
     @OptIn(ExperimentalLayoutApi::class)
     @Composable
-    fun LocationBox() {
-        LaunchedEffect(true) {
-            instance.setOnLocationStateChangeListener(object : ESLocationChangeListener {
-                override fun onChange(locationStateParam: LocationState) {
-                    locationState = locationStateParam
-                }
-            })
-        }
-
-        var showLocation by remember {
-            mutableStateOf(true)
-        }
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
-            modifier = Modifier
-                .padding(top = 10.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(
-                    MaterialTheme.colorScheme.primaryContainer
-                )
-                .padding(horizontal = 6.dp)
-        ) {
-            Text("平面坐标")
-            Switch(isSurfaceSwitch, onCheckedChange = {
-                isSurfaceSwitch = it
-            } )
-        }
+    fun LocationInfoDisplay() {
         if (locationState != null) {
-
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
                 if (isSurfaceSwitch) {
-                    val doubles = GaussConvert.BL_xy3(locationState?.lat?.toDouble()!!, locationState?.lon?.toDouble()!!);
+                    val doubles = GaussConvert.BL_xy3(
+                        locationState?.lat?.toDouble()!!,
+                        locationState?.lon?.toDouble()!!
+                    )
                     SuggestionChip(
                         onClick = { },
-                        label = { Text("x / y ${"%.2f".format(doubles[0])} - ${"%.2f".format(doubles[1])}") }
+                        label = {
+                            Text(
+                                "x/y ${"%.2f".format(doubles[0])} - ${"%.2f".format(doubles[1])}",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
                     )
                 } else {
                     SuggestionChip(
                         onClick = { },
-                        label = { Text("Lon / Lat ${locationState?.lon} - ${locationState?.lat}") }
+                        label = {
+                            Text(
+                                "Lon/Lat ${locationState?.lon} - ${locationState?.lat}",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
                     )
                 }
                 SuggestionChip(
                     onClick = { },
-                    label = { Text("水平误差 ±${"%.2f".format(locationState?.getxInaccuracies())}m") }
+                    label = {
+                        Text(
+                            "水平误差 ±${"%.2f".format(locationState?.getxInaccuracies())}m",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
                 )
+                if (!isSimpleDataSwitch) {
+                    SuggestionChip(
+                        onClick = { },
+                        label = {
+                            Text(
+                                "高程 ${locationState?.height}(±${"%.2f".format(locationState?.getyInaccuracies())}m)",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    )
+                }
                 SuggestionChip(
                     onClick = { },
                     label = {
                         Text(
-                            "高程  (高程误差)   ${locationState?.height}(±${
-                                "%.2f".format(
-                                    locationState?.getyInaccuracies()
-                                )
-                            }m)"
+                            "定位状态 ${locationState!!.locationStatusShow}",
+                            style = MaterialTheme.typography.bodySmall
                         )
                     }
                 )
-                SuggestionChip(
-                    onClick = { },
-                    label = { Text("定位状态 ${locationState!!.locationStatusShow}") }
-                )
-                SuggestionChip(
-                    onClick = { },
-                    label = { Text("解算卫星 ${locationState?.satelliteNum}") }
-                )
-                SuggestionChip(
-                    onClick = { },
-                    label = { Text("PDOP值 ${locationState!!.pdop}") }
-                )
-                SuggestionChip(
-                    onClick = { },
-                    label = { Text("数据来源 ${if (locationState!!.source == Constant.LOCATION_SOURCE_ANTENNA) "天线" else "手机自带高精度"}") }
-                )
-                SuggestionChip(
-                    onClick = { },
-                    label = { Text(" ${if (locationState!!.source == Constant.LOCATION_SOURCE_ANTENNA) "天线" else "手机自带高精度"}") }
-                )
+                if (!isSimpleDataSwitch) {
+                    SuggestionChip(
+                        onClick = { },
+                        label = {
+                            Text(
+                                "解算卫星 ${locationState?.satelliteNum}",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    )
+                    SuggestionChip(
+                        onClick = { },
+                        label = {
+                            Text(
+                                "PDOP值 ${locationState!!.pdop}",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    )
+                    SuggestionChip(
+                        onClick = { },
+                        label = {
+                            Text(
+                                "数据来源 ${if (locationState!!.source == Constant.LOCATION_SOURCE_ANTENNA) "天线" else "手机自带高精度"}",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    )
+                }
 
                 if (locationState!!.source == Constant.LOCATION_SOURCE_ANTENNA) {
                     SuggestionChip(
                         onClick = { },
-                        label = { Text("天线网络数据是否参与结算:  ${if (locationState!!.networkDiffSync) "是" else "否"}") }
+                        label = {
+                            Text(
+                                "网络数据参与结算: ${if (locationState!!.networkDiffSync) "是" else "否"}",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
                     )
                 }
             }
         } else {
             SuggestionChip(
                 onClick = { },
-                label = { Text("暂无位置信息") }
+                label = { Text("暂无位置信息", style = MaterialTheme.typography.bodySmall) }
             )
         }
-
     }
 
     @Composable
-    fun USBBox() {
+    fun DeviceFunctionBox() {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White)
+        ) {
+            Column(
+                modifier = Modifier.padding(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    "设备功能",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Light
+                )
+
+                // 激光测距
+                LaserMeasurementSection()
+
+                HorizontalDivider(Modifier.padding(vertical = 2.dp))
+
+                // 设备设置
+                DeviceSettingsSection()
+            }
+        }
+    }
+
+    @Composable
+    fun LaserMeasurementSection() {
+        Text(
+            "激光测距",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Medium
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            PrimaryButton(
+                onClick = {
+                    instance.enableMeasure(object : ESAntennaMeasureEnableListener {
+                        override fun onStart() {
+                            measureFlag = true
+                            syncLog("激光测距已可用")
+                        }
+                    })
+                },
+                enabled = !measureFlag,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(30.dp)
+            ) {
+                Text("使能", style = MaterialTheme.typography.labelSmall)
+            }
+
+            PrimaryButton(
+                onClick = {
+                    measureFlag = false
+                    instance.disableMeasure()
+                },
+                enabled = measureFlag,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(30.dp)
+            ) {
+                Text("停止", style = MaterialTheme.typography.labelSmall)
+            }
+
+            PrimaryButton(
+                onClick = {
+                    instance.measure(object : ESAntennaMeasureListener {
+                        override fun onMeasure(isSuccess: Boolean, distance: String) {
+                            if (isSuccess) {
+                                syncLog("距离${distance}毫米")
+                                messageState = "距离${distance}毫米"
+                            } else {
+                                syncLog("测量失败")
+                            }
+                        }
+                    })
+                },
+                enabled = measureFlag,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(30.dp)
+            ) {
+                Text("测量", style = MaterialTheme.typography.labelSmall)
+            }
+        }
+    }
+
+    @Composable
+    fun DeviceSettingsSection() {
+        Text(
+            "设备设置",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Medium
+        )
+
+        // 第一行按钮
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            PrimaryButton(
+                onClick = {
+                    XPopup.Builder(this@MainActivity)
+                        .asInputConfirm("请输入仪器高（单位米）", "请输入仪器高（单位米）") {
+                            it
+                            try {
+                                val toDouble = it.toDouble()
+                                instance.setDeviceHeight(toDouble)
+                                deviceHeight = toDouble
+                            } catch (e: Exception) {
+                                ToastUtils.showLong("请输入数字")
+                            }
+                        }
+                        .show()
+                },
+                modifier = Modifier
+                    .weight(1f)
+                    .height(30.dp)
+            ) {
+                Text(
+                    if (deviceHeight > 0) "仪器高(${deviceHeight}m)" else "仪器高设置",
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
+
+            PrimaryButton(
+                onClick = {
+                    instance.changeDeviceGNSSWorkMode(
+                        if (gnssWorkMode == 0) 1 else 0,
+                        object : ESGNSSModeChangeListener {
+                            override fun onChange(success: Boolean, message: String) {
+                                if (success) {
+                                    gnssWorkMode = if (gnssWorkMode == 0) 1 else 0
+                                    syncLog("GNSS工作模式已切换为${if (gnssWorkMode == 0) "流动站" else "基准站"}")
+                                } else {
+                                    syncLog("GNSS工作模式切换失败: ${message}")
+                                }
+                            }
+                        })
+                    MainScope().launch {
+                        delay(1000)
+                        queryGnssWorkMode()
+                    }
+                },
+                enabled = bluetoothFlag || usbFlag,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(30.dp)
+            ) {
+                Text(
+                    if (gnssWorkMode == 0) "开启基准站" else "关闭基准站",
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
+        }
+
+        // 第二行按钮
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            PrimaryButton(
+                onClick = {
+                    if (gnssWorkMode == 1) {
+                        ToastUtils.showLong("基准站模式下，不可切换，请先关闭基准站模式")
+                        return@PrimaryButton
+                    }
+                    instance.changeDeviceWifiMode(
+                        if (wifiMode == 0) 1 else 0,
+                        object : ESDeviceWifiModeChangeListener {
+                            override fun onChange(success: Boolean, message: String) {
+                                if (success) {
+                                    wifiMode = if (wifiMode == 0) 1 else 0
+                                    syncLog("WIFI模式已切换为${if (wifiMode == 0) "外置天线" else "内置天线"}")
+                                } else {
+                                    syncLog("WIFI模式切换失败: ${message}")
+                                }
+                            }
+                        })
+                },
+                enabled = bluetoothFlag || usbFlag,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(30.dp)
+            ) {
+                Text(
+                    if (wifiMode == 0) "切换内置wifi" else "切换外置wifi",
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
+
+            PrimaryButton(
+                onClick = {
+                    instance.queryBatteryInfo(object : ESBatteryQueryListener {
+                        override fun onChange(battery: String) {
+                            ToastUtils.showShort("当前电量: ${battery}%")
+                        }
+                    })
+                },
+                enabled = bluetoothFlag || usbFlag,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(30.dp)
+            ) {
+                Text("查询电量", style = MaterialTheme.typography.labelSmall)
+            }
+        }
+
+        // 基准站坐标配置
+        AnimatedVisibility(gnssWorkMode == 1) {
+            PrimaryButton(
+                onClick = {
+                    XPopup.Builder(this@MainActivity)
+                        .asInputConfirm(
+                            "请输入经纬度高层每项数据，以空格分割",
+                            "格式: 经度 维度 高程"
+                        ) {
+                            it
+                            try {
+                                val datas = it.split(" ")
+                                if (datas.size != 3) {
+                                    ToastUtils.showShort("经纬度高程输入异常")
+                                }
+                                val lon = datas[0].toDouble()
+                                val lat = datas[1].toDouble()
+                                val height = datas[2].toDouble()
+
+                                XPopup.Builder(this@MainActivity)
+                                    .asConfirm(
+                                        "输入确认",
+                                        "您输入的经度Lon:${lon} 纬度Lat: ${lat} 高程${height} 确定要配置吗？"
+                                    ) {
+                                        instance.setStaticModeLocation(
+                                            lon,
+                                            lat,
+                                            height,
+                                            object : ESDeviceSettingListener {
+                                                override fun onChange(
+                                                    type: Int,
+                                                    isSuccess: Boolean
+                                                ) {
+                                                    if (type == Constant.STATIC_LOCATION_SETTING) {
+                                                        ToastUtils.showLong("位置设置${if (isSuccess) "成功" else "失败"}")
+                                                    }
+                                                }
+                                            })
+                                    }
+                                    .show()
+                            } catch (e: Exception) {
+                                ToastUtils.showLong("输入异常, 经纬度高程必须是数字")
+                            }
+                        }
+                        .show()
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(30.dp)
+                    .padding(top = 2.dp)
+            ) {
+                Text("配置基准站坐标", style = MaterialTheme.typography.labelSmall)
+            }
+        }
+    }
+
+
+    @Composable
+    fun ConnectionControlBox() {
         var autoBluetoothFlag by remember {
             mutableStateOf(false)
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            if (!usbFlag) {
-                Button(onClick = {
-                    if (Api.appToken.isEmpty()) {
-                        ToastUtils.showShort("无法获取到AppToken, FM信号弱的情况下可能无法固定解")
-                    }
-                    lifecycleScope.launch{
-                        syncLog("正在获取SDKToken")
-                        Api.getSdkToken(appUserId) { flag ->
-                            try {
-                                instance.usbConnect(this@MainActivity, lon, lat, autoBluetoothFlag, appUserId, Api.sdkToken)
-                            } catch (e: EsException) {
-                                // appUserId 或者 Key 未传将抛出异常
-                                syncLog("USB连接失败: ${e.message}")
-                            }
-                        }
-                    }
-                }, enabled = usbAttachFlag && !usbFlag) {
-                    Text("连接天线")
-                }
 
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White)
+        ) {
+            Column(
+                modifier = Modifier.padding(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    "连接控制",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Light
+                )
+
+                // USB连接区域
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(2.dp),
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(
-                            MaterialTheme.colorScheme.primaryContainer
-                        )
-                        .padding(horizontal = 6.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("是否自动连接蓝牙")
-                    Switch(autoBluetoothFlag, onCheckedChange = {
-                        autoBluetoothFlag = it
-                    }, enabled = usbAttachFlag && !usbFlag)
-                }
-            }
-
-        }
-    }
-
-    @Composable
-    fun BlueToothBox() {
-
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Button(onClick = {
-                if (Api.appToken.isEmpty()) {
-                    ToastUtils.showShort("无法获取到AppToken, FM信号弱的情况下可能无法固定解")
-                }
-                lifecycleScope.launch{
-                    syncLog("正在获取SDKToken")
-                    Api.getSdkToken(appUserId) { flag ->
-                        val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
-                        if (bluetoothAdapter == null) {
-                            // 设备不支持蓝牙
-                            ToastUtils.showShort("设备不支持蓝牙")
-                            return@getSdkToken
-                        } else if (!bluetoothAdapter.isEnabled()) {
-                            // 蓝牙未启用
-                            ToastUtils.showShort("请先开启蓝牙")
-                            return@getSdkToken
-                        }
-                        instance.startBluetoothScan(this@MainActivity,
-                            object : ESBluetoothScanResultListener {
-                                override fun onChange(info: BluetoothInfo) {
-                                    if (bluetoothDeviceList.find { it -> it.name == info.name } == null) {
-                                        bluetoothDeviceList.add(info)
+                    PrimaryButton(
+                        onClick = {
+                            if (Api.appToken.isEmpty()) {
+                                ToastUtils.showShort("无法获取到AppToken, FM信号弱的情况下可能无法固定解")
+                            }
+                            lifecycleScope.launch {
+                                syncLog("正在获取SDKToken")
+                                Api.getSdkToken(appUserId) { flag ->
+                                    try {
+                                        instance.usbConnect(
+                                            this@MainActivity,
+                                            lon,
+                                            lat,
+                                            autoBluetoothFlag,
+                                            appUserId,
+                                            Api.sdkToken
+                                        )
+                                    } catch (e: EsException) {
+                                        syncLog("USB连接失败: ${e.message}")
                                     }
                                 }
-                            })
+                            }
+                        },
+                        enabled = usbAttachFlag && !usbFlag,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(32.dp)
+                    ) {
+                        Text("USB连接", style = MaterialTheme.typography.bodySmall)
+                    }
+
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("自动蓝牙", style = MaterialTheme.typography.labelSmall)
+                        Switch(
+                            checked = autoBluetoothFlag,
+                            onCheckedChange = { autoBluetoothFlag = it },
+                            enabled = usbAttachFlag && !usbFlag,
+                            modifier = Modifier.scale(0.8f)
+                        )
                     }
                 }
-            }, enabled = !bluetoothFlag) {
-                Text("蓝牙连接")
+
+                // 蓝牙连接区域
+                PrimaryButton(
+                    onClick = {
+                        if (Api.appToken.isEmpty()) {
+                            ToastUtils.showShort("无法获取到AppToken, FM信号弱的情况下可能无法固定解")
+                        }
+                        lifecycleScope.launch {
+                            syncLog("正在获取SDKToken")
+                            Api.getSdkToken(appUserId) { flag ->
+                                val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
+                                if (bluetoothAdapter == null) {
+                                    ToastUtils.showShort("设备不支持蓝牙")
+                                    return@getSdkToken
+                                } else if (!bluetoothAdapter.isEnabled) {
+                                    ToastUtils.showShort("请先开启蓝牙")
+                                    return@getSdkToken
+                                }
+                                instance.startBluetoothScan(
+                                    this@MainActivity,
+                                    object : ESBluetoothScanResultListener {
+                                        override fun onChange(info: BluetoothInfo) {
+                                            if (bluetoothDeviceList.find { it -> it.name == info.name } == null) {
+                                                bluetoothDeviceList.add(info)
+                                            }
+                                        }
+                                    })
+                            }
+                        }
+                    },
+                    enabled = !bluetoothFlag,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(32.dp)
+                ) {
+                    Text("蓝牙扫描连接", style = MaterialTheme.typography.bodySmall)
+                }
             }
-
-
         }
-
     }
 
     @Composable
-    fun StatusBox() {
-
-
+    fun DeviceStatusBox() {
         var isStartSuccessState by remember {
             mutableStateOf(false)
         }
@@ -829,13 +1215,11 @@ class MainActivity : ComponentActivity() {
                     isStartSuccess: Boolean,
                     message: String
                 ) {
-
                     isConnectSuccessState = isConnectSuccess
                     isStartSuccessState = isStartSuccess
                     messageState = message
                     syncLog(message)
 
-                    // typec 是为连接
                     locationSource =
                         if (source == Constant.ANTENNA_SOURCE_BLUETOOTH && !instance.usbConnectStatus) {
                             source
@@ -847,6 +1231,18 @@ class MainActivity : ComponentActivity() {
                             bluetoothFlag = true
                         } else {
                             usbFlag = true
+                        }
+                        syncLog("正在查询天线GNSS工作模式")
+                        queryGnssWorkMode()
+
+                        MainScope().launch {
+                            delay(500)
+                            syncLog("正在查询天线Wifi模式")
+                            instance.queryDeviceWifiMode(object : ESDeviceWifiModeQueryListener {
+                                override fun onChange(type: Int) {
+                                    wifiMode = type
+                                }
+                            })
                         }
                     }
                 }
@@ -863,6 +1259,7 @@ class MainActivity : ComponentActivity() {
                         isConnectSuccessState = false
                         locationState = null
                         measureFlag = false
+
                         otaPercent = 0
                         isOta = false
                     }
@@ -873,7 +1270,6 @@ class MainActivity : ComponentActivity() {
                             syncLog("已自动切换到USB方式")
                             messageState = "已自动切换到USB方式"
                             syncLog("已自动切换到USB方式")
-
                         }
                     } else {
                         usbFlag = false
@@ -883,7 +1279,6 @@ class MainActivity : ComponentActivity() {
                             syncLog("已自动切换到蓝牙方式")
                             messageState = "已自动切换到蓝牙方式"
                             syncLog("已自动切换到蓝牙方式")
-
                         }
                     }
                 }
@@ -907,30 +1302,69 @@ class MainActivity : ComponentActivity() {
                         bluetoothFlag = false
                     }
                 }
-
             })
         }
 
-        Column(
-            Modifier
-                .clip(
-                    RoundedCornerShape(10.dp)
-                )
-                .background(MaterialTheme.colorScheme.primaryContainer)
-                .padding(16.dp)
-                .fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White)
         ) {
-            Text("当前机器是否挂载Type-C设备: ${if (usbAttachFlag) "已挂载" else "未挂载"}")
-            Text("当前Usb连接状态: ${if (usbFlag) "已连接" else "未连接"}")
-            Text("当前天线连接方式: ${if (locationSource == -1) "未知" else if (locationSource == Constant.ANTENNA_SOURCE_USB) "TYPE-C" else "蓝牙"}")
-            Text("是否连接成功: ${if (isConnectSuccessState) "成功" else "未成功"}")
-            Text("是否启动成功: ${if (isStartSuccessState) "成功" else "未成功"}")
-            Text("日志信息: $messageState")
-        }
+            Column(
+                modifier = Modifier.padding(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    "设备状态",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Light
+                )
 
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    CompactStatusItem(
+                        "Type-C设备",
+                        if (usbAttachFlag) "已挂载" else "未挂载",
+                        usbAttachFlag
+                    )
+                    CompactStatusItem("USB连接", if (usbFlag) "已连接" else "未连接", usbFlag)
+                    CompactStatusItem(
+                        "连接方式",
+                        if (locationSource == -1) "未知" else if (locationSource == Constant.ANTENNA_SOURCE_USB) "TYPE-C" else "蓝牙",
+                        locationSource != -1
+                    )
+                    CompactStatusItem(
+                        "连接状态",
+                        if (isConnectSuccessState) "成功" else "未成功",
+                        isConnectSuccessState
+                    )
+                    CompactStatusItem(
+                        "启动状态",
+                        if (isStartSuccessState) "成功" else "未成功",
+                        isStartSuccessState
+                    )
+                    if (messageState.isNotEmpty() && messageState != "暂无日志") {
+                        Text(
+                            messageState,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 1.dp)
+                        )
+                    }
+                }
+            }
+        }
     }
 
+
+    private fun queryGnssWorkMode() {
+        instance.queryDeviceGNSSWorkMode(object : ESGNSSModeQueryListener {
+            override fun onChange(type: Int) {
+                gnssWorkMode = type
+            }
+        })
+    }
 
     private fun syncLog(message: String) {
         if (message.isEmpty()) {
@@ -938,8 +1372,75 @@ class MainActivity : ComponentActivity() {
         }
         logList.add(0, message)
         ToastUtils.showShort(message)
-
     }
 
+    @Composable
+    fun CompactStatusItem(label: String, value: String, isSuccess: Boolean) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Medium,
+                color = if (isSuccess) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+
+    @Composable
+    fun CompactToggle(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier
+                .clip(RoundedCornerShape(16.dp))
+                .background(
+                    if (checked) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                )
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = if (checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Switch(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+                modifier = Modifier.scale(0.6f)
+            )
+        }
+    }
+
+    @Composable
+    fun PrimaryButton(
+        onClick: () -> Unit,
+        enabled: Boolean = true,
+        modifier: Modifier = Modifier,
+        content: @Composable RowScope.() -> Unit
+    ) {
+        Button(
+            onClick = onClick,
+            enabled = enabled,
+            modifier = modifier,
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFF3B5F8A),
+                contentColor = Color.White,
+                disabledContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+            ),
+            content = content
+        )
+    }
 }
 
