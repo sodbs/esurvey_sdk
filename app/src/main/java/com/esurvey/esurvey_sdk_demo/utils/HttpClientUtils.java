@@ -109,6 +109,7 @@ public class HttpClientUtils {
             connection.setRequestProperty("Accept-Language", "zh-CN");
             connection.setRequestProperty("Connection", "Keep-Alive");
             connection.setRequestProperty("Charset", "UTF-8");
+            connection.setRequestProperty("Content-Type", "application/json");
             if (appToken != null && !appToken.isEmpty()) {
                 connection.setRequestProperty("token", appToken);
             }
