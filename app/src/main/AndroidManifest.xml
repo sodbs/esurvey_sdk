@@ -61,6 +61,8 @@
                 <action android:name="cn.programmer.CUSTOM_INTENT_LOCATION" />
             </intent-filter>
         </receiver>
+
+
     </application>
 
 </manifest>
