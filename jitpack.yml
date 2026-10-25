@@ -1,2 +1,2 @@
 install:
-  - mvn install:install-file -Dfile=esurvey_sdk-4.6.aar -DgroupId=cn.sodbs -DartifactId=esurvey_sdk -Dversion=4.6 -Dpackaging=aar -DpomFile=pom.xml
+  - mvn -B -f jitpack-install.pom org.apache.maven.plugins:maven-install-plugin:2.5.2:install-file -Dfile="$PWD/esurvey_sdk-4.6.aar" -DgroupId=cn.sodbs -DartifactId=esurvey_sdk -Dversion=4.6 -Dpackaging=aar -DpomFile="$PWD/pom.xml"
