@@ -1,7 +1,7 @@
 {
-  "version": "4.6",
-  "source_commit": "391b6ce387c06439c4578ffa62bd6dad76359d4b",
+  "version": "4.7",
+  "source_commit": "4a61e5a5bc148d6ee1ba54e74bf2a3118aab1f30",
   "source_dirty": false,
-  "aar_sha256": "56f64754aa296c0e4edd53a4b2c86d3880c93d7d9246da6b6fa1f093103073f2",
+  "aar_sha256": "19d923e6f08f0e8356c2538cab8cc585bda3a732dd25a44c622ebe8cb191860d",
   "repository": "sodbs/esurvey_sdk"
 }
