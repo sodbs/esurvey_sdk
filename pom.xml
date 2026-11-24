@@ -9,7 +9,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>cn.sodbs</groupId>
   <artifactId>esurvey_sdk</artifactId>
-  <version>4.8</version>
+  <version>4.9</version>
   <packaging>aar</packaging>
   <build>
     <plugins>
